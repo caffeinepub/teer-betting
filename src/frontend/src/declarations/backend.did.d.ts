@@ -32,16 +32,18 @@ export interface Transaction {
   'status' : { 'pending' : null } |
     { 'approved' : null } |
     { 'rejected' : null },
-  'transactionType' : { 'bet' : { 'betId' : BetId } } |
+  'transactionType' : { 'bet' : { 'betId' : BetId, 'amount' : bigint } } |
     { 'deposit' : { 'upiRef' : string, 'amount' : bigint } } |
     { 'withdrawal' : { 'upiId' : string, 'amount' : bigint } } |
-    { 'payout' : { 'betId' : BetId } },
+    { 'payout' : { 'betId' : BetId, 'amount' : bigint } },
+  'rejectionReason' : [] | [string],
   'user' : Principal,
   'timestamp' : Time,
   'transactionId' : TransactionId,
 }
 export type TransactionId = bigint;
-export interface UserProfilePublic { 'wallet' : bigint }
+export interface UserProfilePublic { 'userId' : bigint, 'wallet' : bigint }
+export interface UserProfileAdmin { 'user' : Principal, 'userId' : bigint, 'wallet' : bigint }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
@@ -52,10 +54,11 @@ export interface _SERVICE {
   'closeDraw' : ActorMethod<[DrawId], undefined>,
   'createDepositRequest' : ActorMethod<[bigint, string], TransactionId>,
   'createWithdrawalRequest' : ActorMethod<[bigint, string], TransactionId>,
+  'deductBalance' : ActorMethod<[Principal, bigint], undefined>,
   'getActiveDraw' : ActorMethod<[], [] | [Draw]>,
   'getAllBets' : ActorMethod<[], Array<Bet>>,
   'getAllTransactions' : ActorMethod<[], Array<Transaction>>,
-  'getAllUserProfiles' : ActorMethod<[], Array<UserProfilePublic>>,
+  'getAllUserProfiles' : ActorMethod<[], Array<UserProfileAdmin>>,
   'getBalance' : ActorMethod<[Principal], bigint>,
   'getCallerBets' : ActorMethod<[], Array<Bet>>,
   'getCallerTransactions' : ActorMethod<[], Array<Transaction>>,
@@ -63,10 +66,12 @@ export interface _SERVICE {
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getDrawHistory' : ActorMethod<[], Array<Draw>>,
   'getPendingRequests' : ActorMethod<[], Array<Transaction>>,
+  'getUserByUserId' : ActorMethod<[bigint], [] | [UserProfileAdmin]>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfilePublic]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'placeBet' : ActorMethod<[DrawId, bigint, bigint], BetId>,
   'rejectTransaction' : ActorMethod<[TransactionId], undefined>,
+  'rejectTransactionWithReason' : ActorMethod<[TransactionId, string], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfilePublic], undefined>,
   'settleDraw' : ActorMethod<[DrawId, bigint], undefined>,
   'startDraw' : ActorMethod<[], DrawId>,

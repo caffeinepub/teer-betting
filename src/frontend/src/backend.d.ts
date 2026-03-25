@@ -34,6 +34,12 @@ export interface Draw {
 }
 export type DrawId = bigint;
 export interface UserProfilePublic {
+    userId: bigint;
+    wallet: bigint;
+}
+export interface UserProfileAdmin {
+    user: Principal;
+    userId: bigint;
     wallet: bigint;
 }
 export interface Transaction {
@@ -42,6 +48,7 @@ export interface Transaction {
         __kind__: "bet";
         bet: {
             betId: BetId;
+            amount: bigint;
         };
     } | {
         __kind__: "deposit";
@@ -59,8 +66,10 @@ export interface Transaction {
         __kind__: "payout";
         payout: {
             betId: BetId;
+            amount: bigint;
         };
     };
+    rejectionReason: string | null;
     user: Principal;
     timestamp: Time;
     transactionId: TransactionId;
@@ -81,10 +90,11 @@ export interface backendInterface {
     closeDraw(drawId: DrawId): Promise<void>;
     createDepositRequest(amount: bigint, upiRef: string): Promise<TransactionId>;
     createWithdrawalRequest(amount: bigint, upiId: string): Promise<TransactionId>;
+    deductBalance(user: Principal, amount: bigint): Promise<void>;
     getActiveDraw(): Promise<Draw | null>;
     getAllBets(): Promise<Array<Bet>>;
     getAllTransactions(): Promise<Array<Transaction>>;
-    getAllUserProfiles(): Promise<Array<UserProfilePublic>>;
+    getAllUserProfiles(): Promise<Array<UserProfileAdmin>>;
     getBalance(user: Principal): Promise<bigint>;
     getCallerBets(): Promise<Array<Bet>>;
     getCallerTransactions(): Promise<Array<Transaction>>;
@@ -92,10 +102,12 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getDrawHistory(): Promise<Array<Draw>>;
     getPendingRequests(): Promise<Array<Transaction>>;
+    getUserByUserId(userId: bigint): Promise<UserProfileAdmin | null>;
     getUserProfile(user: Principal): Promise<UserProfilePublic | null>;
     isCallerAdmin(): Promise<boolean>;
     placeBet(drawId: DrawId, number: bigint, amount: bigint): Promise<BetId>;
     rejectTransaction(transactionId: TransactionId): Promise<void>;
+    rejectTransactionWithReason(transactionId: TransactionId, reason: string): Promise<void>;
     saveCallerUserProfile(profile: UserProfilePublic): Promise<void>;
     settleDraw(drawId: DrawId, winningNumber: bigint): Promise<void>;
     startDraw(): Promise<DrawId>;

@@ -11,18 +11,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Activity,
+  BadgeDollarSign,
   CreditCard,
   ListOrdered,
   Loader2,
   Play,
+  Search,
   Square,
   Trophy,
   Users,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import type { UserProfileAdmin } from "../backend.d";
 import { Variant_pending_approved_rejected } from "../backend.d";
 import {
   useActiveDraw,
@@ -31,9 +35,11 @@ import {
   useAllUserProfiles,
   useApproveTransaction,
   useCloseDraw,
+  useDeductBalance,
   useDrawHistory,
+  useGetUserByUserId,
   usePendingRequests,
-  useRejectTransaction,
+  useRejectTransactionWithReason,
   useSettleDraw,
   useStartDraw,
 } from "../hooks/useQueries";
@@ -50,10 +56,37 @@ export default function AdminPage() {
   const closeDraw = useCloseDraw();
   const settleDraw = useSettleDraw();
   const approveTransaction = useApproveTransaction();
-  const rejectTransaction = useRejectTransaction();
+  const rejectWithReason = useRejectTransactionWithReason();
+  const deductBalance = useDeductBalance();
+  const getUserById = useGetUserByUserId();
 
   const [winnerNumber, setWinnerNumber] = useState("");
   const [activeAdminTab, setActiveAdminTab] = useState("draws");
+
+  // Reject with reason state
+  const [showRejectForm, setShowRejectForm] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [rejectReasonMap, setRejectReasonMap] = useState<
+    Record<string, string>
+  >({});
+
+  // Deduct balance state
+  const [showDeductForm, setShowDeductForm] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [deductMap, setDeductMap] = useState<Record<string, string>>({});
+
+  // User search state
+  const [userSearchId, setUserSearchId] = useState("");
+  const [searchedUser, setSearchedUser] = useState<
+    UserProfileAdmin | null | undefined
+  >(undefined);
+
+  // Draw history settle state
+  const [settleHistoryMap, setSettleHistoryMap] = useState<
+    Record<string, string>
+  >({});
 
   const handleStartDraw = async () => {
     try {
@@ -95,6 +128,27 @@ export default function AdminPage() {
     }
   };
 
+  const handleSettleHistory = async (drawIdStr: string) => {
+    const numStr = settleHistoryMap[drawIdStr] ?? "";
+    const num = Number.parseInt(numStr);
+    if (Number.isNaN(num) || num < 0 || num > 99) {
+      toast.error("Enter a valid number (00-99)");
+      return;
+    }
+    try {
+      await settleDraw.mutateAsync({
+        drawId: BigInt(drawIdStr),
+        winningNumber: BigInt(num),
+      });
+      toast.success(
+        `Draw #${drawIdStr} settled! Winning: ${num.toString().padStart(2, "0")}`,
+      );
+      setSettleHistoryMap((prev) => ({ ...prev, [drawIdStr]: "" }));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to settle draw");
+    }
+  };
+
   const handleApprove = async (id: bigint) => {
     try {
       await approveTransaction.mutateAsync(id);
@@ -104,12 +158,53 @@ export default function AdminPage() {
     }
   };
 
-  const handleReject = async (id: bigint) => {
+  const handleRejectWithReason = async (id: bigint, idStr: string) => {
+    const reason = rejectReasonMap[idStr] ?? "";
     try {
-      await rejectTransaction.mutateAsync(id);
+      await rejectWithReason.mutateAsync({ transactionId: id, reason });
       toast.success("Transaction rejected");
+      setShowRejectForm((prev) => ({ ...prev, [idStr]: false }));
+      setRejectReasonMap((prev) => ({ ...prev, [idStr]: "" }));
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to reject");
+    }
+  };
+
+  const handleDeductBalance = async (
+    principalStr: string,
+    userPrincipal: any,
+  ) => {
+    const amountStr = deductMap[principalStr] ?? "";
+    const amount = Number.parseInt(amountStr);
+    if (Number.isNaN(amount) || amount <= 0) {
+      toast.error("Enter a valid amount to deduct");
+      return;
+    }
+    try {
+      await deductBalance.mutateAsync({
+        user: userPrincipal,
+        amount: BigInt(amount),
+      });
+      toast.success(`Deducted ₹${amount} from user`);
+      setShowDeductForm((prev) => ({ ...prev, [principalStr]: false }));
+      setDeductMap((prev) => ({ ...prev, [principalStr]: "" }));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to deduct balance");
+    }
+  };
+
+  const handleSearchUser = async () => {
+    const idNum = Number.parseInt(userSearchId);
+    if (Number.isNaN(idNum) || idNum <= 0) {
+      toast.error("Enter a valid user ID");
+      return;
+    }
+    try {
+      const result = await getUserById.mutateAsync(BigInt(idNum));
+      setSearchedUser(result);
+      if (!result) toast.info("No user found with that ID");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Search failed");
     }
   };
 
@@ -148,12 +243,15 @@ export default function AdminPage() {
     },
   ];
 
-  const pendingCount = pendingRequests?.length ?? 0;
+  const pendingCount = (pendingRequests as any[])?.length ?? 0;
+  const totalBetAmount =
+    allBets?.reduce((sum, bet) => sum + Number(bet.amount), 0) ?? 0;
+  const usersArr: UserProfileAdmin[] = (allUsers as any) ?? [];
 
   const STATS = [
     {
       label: "Total Users",
-      value: allUsers?.length ?? 0,
+      value: usersArr.length,
       icon: <Users className="w-5 h-5" />,
       color: "text-neon",
       bg: "bg-neon/10",
@@ -174,10 +272,17 @@ export default function AdminPage() {
     },
     {
       label: "Total Transactions",
-      value: allTransactions?.length ?? 0,
+      value: (allTransactions as any[])?.length ?? 0,
       icon: <CreditCard className="w-5 h-5" />,
       color: "text-purple-400",
       bg: "bg-purple-400/10",
+    },
+    {
+      label: "Total Bet Amount",
+      value: `₹${totalBetAmount.toLocaleString()}`,
+      icon: <BadgeDollarSign className="w-5 h-5" />,
+      color: "text-gold",
+      bg: "bg-gold/10",
     },
   ];
 
@@ -199,7 +304,7 @@ export default function AdminPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {STATS.map((stat) => (
           <Card key={stat.label} className="bg-card-deep border-border">
             <CardContent className="p-4 flex items-center gap-3">
@@ -430,6 +535,9 @@ export default function AdminPage() {
                       <TableHead className="text-muted-foreground text-xs">
                         Date
                       </TableHead>
+                      <TableHead className="text-muted-foreground text-xs">
+                        Action
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -437,14 +545,15 @@ export default function AdminPage() {
                       const betCount = allBets
                         ? allBets.filter((b) => b.drawId === draw.id).length
                         : 0;
+                      const drawIdStr = draw.id.toString();
                       return (
                         <TableRow
-                          key={draw.id.toString()}
+                          key={drawIdStr}
                           data-ocid={`admin.draws.item.${idx + 1}`}
                           className="border-border"
                         >
                           <TableCell className="font-mono text-xs">
-                            #{draw.id.toString()}
+                            #{drawIdStr}
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -474,6 +583,36 @@ export default function AdminPage() {
                               Number(draw.createdAt) / 1_000_000,
                             ).toLocaleString()}
                           </TableCell>
+                          <TableCell>
+                            {draw.status.__kind__ === "closed" && (
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="99"
+                                  placeholder="00-99"
+                                  value={settleHistoryMap[drawIdStr] ?? ""}
+                                  onChange={(e) =>
+                                    setSettleHistoryMap((prev) => ({
+                                      ...prev,
+                                      [drawIdStr]: e.target.value,
+                                    }))
+                                  }
+                                  className="w-20 bg-card-mid border-border focus:border-gold text-foreground text-xs h-7 px-2"
+                                />
+                                <Button
+                                  data-ocid={`admin.draws.declare.${idx + 1}`}
+                                  size="sm"
+                                  onClick={() => handleSettleHistory(drawIdStr)}
+                                  disabled={settleDraw.isPending}
+                                  className="bg-gold text-black hover:bg-gold/90 font-bold rounded-full text-xs px-3 h-7"
+                                >
+                                  <Trophy className="w-3 h-3 mr-1" />
+                                  Declare
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -498,7 +637,7 @@ export default function AdminPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {!pendingRequests || pendingRequests.length === 0 ? (
+              {!(pendingRequests as any[])?.length ? (
                 <div
                   data-ocid="admin.pending.empty_state"
                   className="text-center py-8 text-muted-foreground text-sm"
@@ -527,7 +666,7 @@ export default function AdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pendingRequests.map((tx, idx) => {
+                    {(pendingRequests as any[]).map((tx: any, idx: number) => {
                       const type = tx.transactionType.__kind__;
                       const amount =
                         type === "deposit"
@@ -541,9 +680,10 @@ export default function AdminPage() {
                           : type === "withdrawal"
                             ? tx.transactionType.withdrawal.upiId
                             : "-";
+                      const txIdStr = tx.transactionId.toString();
                       return (
                         <TableRow
-                          key={tx.transactionId.toString()}
+                          key={txIdStr}
                           data-ocid={`admin.pending.item.${idx + 1}`}
                           className="border-border"
                         >
@@ -570,26 +710,85 @@ export default function AdminPage() {
                             ).toLocaleString()}
                           </TableCell>
                           <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                data-ocid={`admin.pending.approve.${idx + 1}`}
-                                size="sm"
-                                onClick={() => handleApprove(tx.transactionId)}
-                                disabled={approveTransaction.isPending}
-                                className="bg-neon text-black hover:bg-neon/90 font-bold rounded-full text-xs px-3 h-7"
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                data-ocid={`admin.pending.reject.${idx + 1}`}
-                                size="sm"
-                                onClick={() => handleReject(tx.transactionId)}
-                                disabled={rejectTransaction.isPending}
-                                variant="outline"
-                                className="border-destructive text-destructive hover:bg-destructive/10 rounded-full text-xs px-3 h-7"
-                              >
-                                Reject
-                              </Button>
+                            <div className="flex flex-col gap-2">
+                              <div className="flex gap-2">
+                                <Button
+                                  data-ocid={`admin.pending.approve.${idx + 1}`}
+                                  size="sm"
+                                  onClick={() =>
+                                    handleApprove(tx.transactionId)
+                                  }
+                                  disabled={approveTransaction.isPending}
+                                  className="bg-neon text-black hover:bg-neon/90 font-bold rounded-full text-xs px-3 h-7"
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  data-ocid={`admin.pending.reject.${idx + 1}`}
+                                  size="sm"
+                                  onClick={() =>
+                                    setShowRejectForm((prev) => ({
+                                      ...prev,
+                                      [txIdStr]: !prev[txIdStr],
+                                    }))
+                                  }
+                                  variant="outline"
+                                  className="border-destructive text-destructive hover:bg-destructive/10 rounded-full text-xs px-3 h-7"
+                                >
+                                  Reject
+                                </Button>
+                              </div>
+                              {showRejectForm[txIdStr] && (
+                                <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-card-mid border border-destructive/30">
+                                  <Textarea
+                                    data-ocid={`admin.pending.reject_reason.${idx + 1}`}
+                                    placeholder="Reason for rejection (optional)"
+                                    value={rejectReasonMap[txIdStr] ?? ""}
+                                    onChange={(e) =>
+                                      setRejectReasonMap((prev) => ({
+                                        ...prev,
+                                        [txIdStr]: e.target.value,
+                                      }))
+                                    }
+                                    rows={2}
+                                    className="text-xs bg-card-deep border-border resize-none"
+                                  />
+                                  <div className="flex gap-2">
+                                    <Button
+                                      data-ocid={`admin.pending.confirm_reject.${idx + 1}`}
+                                      size="sm"
+                                      onClick={() =>
+                                        handleRejectWithReason(
+                                          tx.transactionId,
+                                          txIdStr,
+                                        )
+                                      }
+                                      disabled={rejectWithReason.isPending}
+                                      className="bg-destructive text-white hover:bg-destructive/90 font-bold rounded-full text-xs px-3 h-7"
+                                    >
+                                      {rejectWithReason.isPending ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        "Confirm Reject"
+                                      )}
+                                    </Button>
+                                    <Button
+                                      data-ocid={`admin.pending.cancel_reject.${idx + 1}`}
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        setShowRejectForm((prev) => ({
+                                          ...prev,
+                                          [txIdStr]: false,
+                                        }))
+                                      }
+                                      className="text-xs h-7"
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -608,7 +807,7 @@ export default function AdminPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {!allTransactions || allTransactions.length === 0 ? (
+              {!(allTransactions as any[])?.length ? (
                 <div
                   data-ocid="admin.transactions.empty_state"
                   className="text-center py-8 text-muted-foreground text-sm"
@@ -637,14 +836,25 @@ export default function AdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allTransactions.map((tx, idx) => {
+                    {(allTransactions as any[]).map((tx: any, idx: number) => {
                       const type = tx.transactionType.__kind__;
                       const amount =
                         type === "deposit"
                           ? tx.transactionType.deposit.amount
                           : type === "withdrawal"
                             ? tx.transactionType.withdrawal.amount
-                            : null;
+                            : type === "bet"
+                              ? (tx.transactionType.bet.amount ?? null)
+                              : type === "payout"
+                                ? (tx.transactionType.payout.amount ?? null)
+                                : null;
+                      const isRejected =
+                        tx.status ===
+                        Variant_pending_approved_rejected.rejected;
+                      const rejectionReason =
+                        isRejected && tx.rejectionReason
+                          ? tx.rejectionReason
+                          : null;
                       return (
                         <TableRow
                           key={tx.transactionId.toString()}
@@ -660,7 +870,16 @@ export default function AdminPage() {
                           <TableCell>
                             {amount !== null ? `₹${amount.toString()}` : "-"}
                           </TableCell>
-                          <TableCell>{statusBadge(tx.status)}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              {statusBadge(tx.status)}
+                              {rejectionReason && (
+                                <p className="text-xs text-destructive italic">
+                                  {rejectionReason}
+                                </p>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             {new Date(
                               Number(tx.timestamp) / 1_000_000,
@@ -682,15 +901,86 @@ export default function AdminPage() {
             <CardHeader>
               <CardTitle className="text-base font-bold uppercase tracking-wide">
                 All Users
-                {allUsers && allUsers.length > 0 && (
+                {usersArr.length > 0 && (
                   <span className="ml-2 text-muted-foreground font-normal text-sm">
-                    ({allUsers.length} total)
+                    ({usersArr.length} total)
                   </span>
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              {!allUsers || allUsers.length === 0 ? (
+            <CardContent className="space-y-4">
+              {/* Search by User ID */}
+              <div className="flex gap-2 items-end p-3 rounded-xl bg-card-mid border border-border">
+                <div className="flex-1 space-y-1">
+                  <p className="text-xs text-muted-foreground font-semibold uppercase">
+                    Search by User ID
+                  </p>
+                  <Input
+                    data-ocid="admin.users.search_input"
+                    type="number"
+                    placeholder="Enter User ID number"
+                    value={userSearchId}
+                    onChange={(e) => setUserSearchId(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSearchUser()}
+                    className="bg-card-deep border-border focus:border-neon text-foreground"
+                  />
+                </div>
+                <Button
+                  data-ocid="admin.users.search.primary_button"
+                  onClick={handleSearchUser}
+                  disabled={getUserById.isPending}
+                  className="bg-neon text-black hover:bg-neon/90 font-bold rounded-full"
+                >
+                  {getUserById.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+
+              {/* Search result */}
+              {searchedUser !== undefined && (
+                <div
+                  data-ocid="admin.users.search.success_state"
+                  className={`p-4 rounded-xl border ${
+                    searchedUser
+                      ? "bg-neon/5 border-neon/30"
+                      : "bg-destructive/5 border-destructive/30"
+                  }`}
+                >
+                  {searchedUser ? (
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <p className="text-xs text-muted-foreground uppercase">
+                          Found User
+                        </p>
+                        <p className="font-mono font-bold text-neon text-lg">
+                          #
+                          {(searchedUser as any).userId
+                            .toString()
+                            .padStart(4, "0")}
+                        </p>
+                        <p className="text-xs text-muted-foreground font-mono break-all">
+                          {(searchedUser as any).user.toString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Balance</p>
+                        <p className="font-bold text-gold text-lg">
+                          ₹{(searchedUser as any).wallet.toString()}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-destructive font-semibold">
+                      No user found with that ID
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {usersArr.length === 0 ? (
                 <div
                   data-ocid="admin.users.empty_state"
                   className="text-center py-8 text-muted-foreground text-sm"
@@ -702,7 +992,7 @@ export default function AdminPage() {
                   <TableHeader>
                     <TableRow className="border-border">
                       <TableHead className="text-muted-foreground text-xs">
-                        #
+                        User ID
                       </TableHead>
                       <TableHead className="text-muted-foreground text-xs">
                         User
@@ -710,35 +1000,113 @@ export default function AdminPage() {
                       <TableHead className="text-muted-foreground text-xs">
                         Balance
                       </TableHead>
+                      <TableHead className="text-muted-foreground text-xs">
+                        Actions
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allUsers.map((user, userIdx) => (
-                      <TableRow
-                        key={user.wallet.toString() + String(userIdx)}
-                        data-ocid={`admin.users.item.${userIdx + 1}`}
-                        className="border-border"
-                      >
-                        <TableCell className="text-xs text-muted-foreground font-mono w-12">
-                          {userIdx + 1}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-neon/20 flex items-center justify-center text-xs font-bold text-neon">
-                              {userIdx + 1}
-                            </div>
-                            <span className="text-sm font-semibold">
-                              User #{userIdx + 1}
+                    {usersArr.map((userItem: any, userIdx: number) => {
+                      const principalStr = userItem.user.toString();
+                      return (
+                        <TableRow
+                          key={principalStr}
+                          data-ocid={`admin.users.item.${userIdx + 1}`}
+                          className="border-border"
+                        >
+                          <TableCell>
+                            <span className="font-mono font-bold text-neon text-sm">
+                              #{userItem.userId.toString().padStart(4, "0")}
                             </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-gold font-bold">
-                            ₹{user.wallet.toString()}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-neon/20 flex items-center justify-center text-xs font-bold text-neon">
+                                {userIdx + 1}
+                              </div>
+                              <span className="text-xs text-muted-foreground font-mono truncate max-w-[120px]">
+                                {principalStr.substring(0, 12)}...
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-gold font-bold">
+                              ₹{userItem.wallet.toString()}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-2">
+                              <Button
+                                data-ocid={`admin.users.deduct.${userIdx + 1}`}
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  setShowDeductForm((prev) => ({
+                                    ...prev,
+                                    [principalStr]: !prev[principalStr],
+                                  }))
+                                }
+                                className="border-destructive text-destructive hover:bg-destructive/10 rounded-full text-xs px-3 h-7"
+                              >
+                                Deduct Balance
+                              </Button>
+                              {showDeductForm[principalStr] && (
+                                <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-card-mid border border-destructive/30">
+                                  <Input
+                                    data-ocid={`admin.users.deduct_amount.${userIdx + 1}`}
+                                    type="number"
+                                    min="1"
+                                    placeholder="Amount to deduct"
+                                    value={deductMap[principalStr] ?? ""}
+                                    onChange={(e) =>
+                                      setDeductMap((prev) => ({
+                                        ...prev,
+                                        [principalStr]: e.target.value,
+                                      }))
+                                    }
+                                    className="text-xs bg-card-deep border-border h-7 px-2"
+                                  />
+                                  <div className="flex gap-2">
+                                    <Button
+                                      data-ocid={`admin.users.confirm_deduct.${userIdx + 1}`}
+                                      size="sm"
+                                      onClick={() =>
+                                        handleDeductBalance(
+                                          principalStr,
+                                          userItem.user,
+                                        )
+                                      }
+                                      disabled={deductBalance.isPending}
+                                      className="bg-destructive text-white hover:bg-destructive/90 font-bold rounded-full text-xs px-3 h-7"
+                                    >
+                                      {deductBalance.isPending ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        "Confirm"
+                                      )}
+                                    </Button>
+                                    <Button
+                                      data-ocid={`admin.users.cancel_deduct.${userIdx + 1}`}
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        setShowDeductForm((prev) => ({
+                                          ...prev,
+                                          [principalStr]: false,
+                                        }))
+                                      }
+                                      className="text-xs h-7"
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -754,7 +1122,8 @@ export default function AdminPage() {
                 All Bets
                 {allBets && allBets.length > 0 && (
                   <span className="ml-2 text-muted-foreground font-normal text-sm">
-                    ({allBets.length} total)
+                    ({allBets.length} total · ₹{totalBetAmount.toLocaleString()}{" "}
+                    total)
                   </span>
                 )}
               </CardTitle>

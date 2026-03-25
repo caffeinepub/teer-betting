@@ -116,6 +116,12 @@ export interface Draw {
 }
 export type DrawId = bigint;
 export interface UserProfilePublic {
+    userId: bigint;
+    wallet: bigint;
+}
+export interface UserProfileAdmin {
+    user: Principal;
+    userId: bigint;
     wallet: bigint;
 }
 export interface Transaction {
@@ -124,6 +130,7 @@ export interface Transaction {
         __kind__: "bet";
         bet: {
             betId: BetId;
+            amount: bigint;
         };
     } | {
         __kind__: "deposit";
@@ -141,8 +148,10 @@ export interface Transaction {
         __kind__: "payout";
         payout: {
             betId: BetId;
+            amount: bigint;
         };
     };
+    rejectionReason: string | null;
     user: Principal;
     timestamp: Time;
     transactionId: TransactionId;
@@ -164,10 +173,11 @@ export interface backendInterface {
     closeDraw(drawId: DrawId): Promise<void>;
     createDepositRequest(amount: bigint, upiRef: string): Promise<TransactionId>;
     createWithdrawalRequest(amount: bigint, upiId: string): Promise<TransactionId>;
+    deductBalance(user: Principal, amount: bigint): Promise<void>;
     getActiveDraw(): Promise<Draw | null>;
     getAllBets(): Promise<Array<Bet>>;
     getAllTransactions(): Promise<Array<Transaction>>;
-    getAllUserProfiles(): Promise<Array<UserProfilePublic>>;
+    getAllUserProfiles(): Promise<Array<UserProfileAdmin>>;
     getBalance(user: Principal): Promise<bigint>;
     getCallerBets(): Promise<Array<Bet>>;
     getCallerTransactions(): Promise<Array<Transaction>>;
@@ -175,15 +185,17 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getDrawHistory(): Promise<Array<Draw>>;
     getPendingRequests(): Promise<Array<Transaction>>;
+    getUserByUserId(userId: bigint): Promise<UserProfileAdmin | null>;
     getUserProfile(user: Principal): Promise<UserProfilePublic | null>;
     isCallerAdmin(): Promise<boolean>;
     placeBet(drawId: DrawId, number: bigint, amount: bigint): Promise<BetId>;
     rejectTransaction(transactionId: TransactionId): Promise<void>;
+    rejectTransactionWithReason(transactionId: TransactionId, reason: string): Promise<void>;
     saveCallerUserProfile(profile: UserProfilePublic): Promise<void>;
     settleDraw(drawId: DrawId, winningNumber: bigint): Promise<void>;
     startDraw(): Promise<DrawId>;
 }
-import type { BetId as _BetId, Draw as _Draw, DrawId as _DrawId, Time as _Time, Transaction as _Transaction, TransactionId as _TransactionId, UserProfilePublic as _UserProfilePublic, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
+import type { BetId as _BetId, Draw as _Draw, DrawId as _DrawId, Time as _Time, Transaction as _Transaction, TransactionId as _TransactionId, UserProfilePublic as _UserProfilePublic, UserProfileAdmin as _UserProfileAdmin, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
@@ -270,6 +282,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async deductBalance(arg0: Principal, arg1: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deductBalance(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deductBalance(arg0, arg1);
+            return result;
+        }
+    }
     async getActiveDraw(): Promise<Draw | null> {
         if (this.processError) {
             try {
@@ -312,7 +338,7 @@ export class Backend implements backendInterface {
             return from_candid_vec_n7(this._uploadFile, this._downloadFile, result);
         }
     }
-    async getAllUserProfiles(): Promise<Array<UserProfilePublic>> {
+    async getAllUserProfiles(): Promise<Array<UserProfileAdmin>> {
         if (this.processError) {
             try {
                 const result = await this.actor.getAllUserProfiles();
@@ -424,6 +450,20 @@ export class Backend implements backendInterface {
             return from_candid_vec_n7(this._uploadFile, this._downloadFile, result);
         }
     }
+    async getUserByUserId(arg0: bigint): Promise<UserProfileAdmin | null> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getUserByUserId(arg0);
+                return from_candid_opt_UserProfileAdmin(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getUserByUserId(arg0);
+            return from_candid_opt_UserProfileAdmin(this._uploadFile, this._downloadFile, result);
+        }
+    }
     async getUserProfile(arg0: Principal): Promise<UserProfilePublic | null> {
         if (this.processError) {
             try {
@@ -477,6 +517,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.rejectTransaction(arg0);
+            return result;
+        }
+    }
+    async rejectTransactionWithReason(arg0: TransactionId, arg1: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.rejectTransactionWithReason(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.rejectTransactionWithReason(arg0, arg1);
             return result;
         }
     }
@@ -535,6 +589,9 @@ function from_candid_UserRole_n13(_uploadFile: (file: ExternalBlob) => Promise<U
 function from_candid_opt_n12(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_UserProfilePublic]): UserProfilePublic | null {
     return value.length === 0 ? null : value[0];
 }
+function from_candid_opt_UserProfileAdmin(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_UserProfileAdmin]): UserProfileAdmin | null {
+    return value.length === 0 ? null : value[0];
+}
 function from_candid_opt_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_Draw]): Draw | null {
     return value.length === 0 ? null : from_candid_Draw_n4(_uploadFile, _downloadFile, value[0]);
 }
@@ -579,6 +636,7 @@ function from_candid_record_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint
     transactionType: {
         bet: {
             betId: _BetId;
+            amount: bigint;
         };
     } | {
         deposit: {
@@ -593,43 +651,18 @@ function from_candid_record_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint
     } | {
         payout: {
             betId: _BetId;
+            amount: bigint;
         };
     };
+    rejectionReason: [] | [string];
     user: Principal;
     timestamp: _Time;
     transactionId: _TransactionId;
-}): {
-    status: Variant_pending_approved_rejected;
-    transactionType: {
-        __kind__: "bet";
-        bet: {
-            betId: BetId;
-        };
-    } | {
-        __kind__: "deposit";
-        deposit: {
-            upiRef: string;
-            amount: bigint;
-        };
-    } | {
-        __kind__: "withdrawal";
-        withdrawal: {
-            upiId: string;
-            amount: bigint;
-        };
-    } | {
-        __kind__: "payout";
-        payout: {
-            betId: BetId;
-        };
-    };
-    user: Principal;
-    timestamp: Time;
-    transactionId: TransactionId;
-} {
+}): Transaction {
     return {
         status: from_candid_variant_n10(_uploadFile, _downloadFile, value.status),
         transactionType: from_candid_variant_n11(_uploadFile, _downloadFile, value.transactionType),
+        rejectionReason: value.rejectionReason.length === 0 ? null : value.rejectionReason[0],
         user: value.user,
         timestamp: value.timestamp,
         transactionId: value.transactionId
@@ -647,6 +680,7 @@ function from_candid_variant_n10(_uploadFile: (file: ExternalBlob) => Promise<Ui
 function from_candid_variant_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     bet: {
         betId: _BetId;
+        amount: bigint;
     };
 } | {
     deposit: {
@@ -661,30 +695,9 @@ function from_candid_variant_n11(_uploadFile: (file: ExternalBlob) => Promise<Ui
 } | {
     payout: {
         betId: _BetId;
-    };
-}): {
-    __kind__: "bet";
-    bet: {
-        betId: BetId;
-    };
-} | {
-    __kind__: "deposit";
-    deposit: {
-        upiRef: string;
         amount: bigint;
     };
-} | {
-    __kind__: "withdrawal";
-    withdrawal: {
-        upiId: string;
-        amount: bigint;
-    };
-} | {
-    __kind__: "payout";
-    payout: {
-        betId: BetId;
-    };
-} {
+}): Transaction['transactionType'] {
     return "bet" in value ? {
         __kind__: "bet",
         bet: value.bet

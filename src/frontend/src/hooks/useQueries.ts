@@ -1,5 +1,6 @@
+import type { Principal } from "@icp-sdk/core/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { DrawId, TransactionId } from "../backend.d";
+import type { DrawId, TransactionId, UserProfileAdmin } from "../backend.d";
 import { useActor } from "./useActor";
 
 export function useIsAdmin() {
@@ -21,9 +22,10 @@ export function useUserProfile() {
     queryKey: ["userProfile"],
     queryFn: async () => {
       if (!actor) return null;
-      return actor.getCallerUserProfile();
+      return actor.getCallerUserProfile() as any;
     },
     enabled: !!actor && !isFetching,
+    refetchInterval: 15_000,
   });
 }
 
@@ -70,9 +72,10 @@ export function useCallerTransactions() {
     queryKey: ["callerTransactions"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getCallerTransactions();
+      return actor.getCallerTransactions() as any;
     },
     enabled: !!actor && !isFetching,
+    refetchInterval: 10_000,
   });
 }
 
@@ -94,9 +97,10 @@ export function useAllTransactions() {
     queryKey: ["allTransactions"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getAllTransactions();
+      return actor.getAllTransactions() as any;
     },
     enabled: !!actor && !isFetching,
+    refetchInterval: 15_000,
   });
 }
 
@@ -106,7 +110,7 @@ export function usePendingRequests() {
     queryKey: ["pendingRequests"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getPendingRequests();
+      return actor.getPendingRequests() as any;
     },
     enabled: !!actor && !isFetching,
     refetchInterval: 10_000,
@@ -117,11 +121,12 @@ export function useAllUserProfiles() {
   const { actor, isFetching } = useActor();
   return useQuery({
     queryKey: ["allUserProfiles"],
-    queryFn: async () => {
+    queryFn: async (): Promise<UserProfileAdmin[]> => {
       if (!actor) return [];
-      return actor.getAllUserProfiles();
+      return (actor as any).getAllUserProfiles();
     },
     enabled: !!actor && !isFetching,
+    refetchInterval: 15_000,
   });
 }
 
@@ -164,6 +169,7 @@ export function useCreateDeposit() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["callerTransactions"] });
+      qc.invalidateQueries({ queryKey: ["pendingRequests"] });
     },
   });
 }
@@ -184,6 +190,7 @@ export function useCreateWithdrawal() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["callerTransactions"] });
+      qc.invalidateQueries({ queryKey: ["pendingRequests"] });
     },
   });
 }
@@ -200,6 +207,7 @@ export function useApproveTransaction() {
       qc.invalidateQueries({ queryKey: ["pendingRequests"] });
       qc.invalidateQueries({ queryKey: ["allTransactions"] });
       qc.invalidateQueries({ queryKey: ["allUserProfiles"] });
+      qc.invalidateQueries({ queryKey: ["userProfile"] });
     },
   });
 }
@@ -215,6 +223,58 @@ export function useRejectTransaction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pendingRequests"] });
       qc.invalidateQueries({ queryKey: ["allTransactions"] });
+    },
+  });
+}
+
+export function useRejectTransactionWithReason() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      transactionId,
+      reason,
+    }: {
+      transactionId: TransactionId;
+      reason: string;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).rejectTransactionWithReason(transactionId, reason);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pendingRequests"] });
+      qc.invalidateQueries({ queryKey: ["allTransactions"] });
+      qc.invalidateQueries({ queryKey: ["callerTransactions"] });
+    },
+  });
+}
+
+export function useDeductBalance() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      user,
+      amount,
+    }: {
+      user: Principal;
+      amount: bigint;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).deductBalance(user, amount);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["allUserProfiles"] });
+    },
+  });
+}
+
+export function useGetUserByUserId() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async (userId: bigint): Promise<UserProfileAdmin | null> => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).getUserByUserId(userId);
     },
   });
 }
@@ -267,6 +327,8 @@ export function useSettleDraw() {
       qc.invalidateQueries({ queryKey: ["activeDraw"] });
       qc.invalidateQueries({ queryKey: ["drawHistory"] });
       qc.invalidateQueries({ queryKey: ["allBets"] });
+      qc.invalidateQueries({ queryKey: ["userProfile"] });
+      qc.invalidateQueries({ queryKey: ["allUserProfiles"] });
     },
   });
 }

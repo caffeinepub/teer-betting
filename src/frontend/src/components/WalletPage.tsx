@@ -10,7 +10,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowDownCircle, ArrowUpCircle, Loader2, Wallet } from "lucide-react";
+import {
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Hash,
+  Loader2,
+  Wallet,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Variant_pending_approved_rejected } from "../backend.d";
@@ -81,6 +87,15 @@ export default function WalletPage() {
     }
   };
 
+  const getTransactionAmount = (tx: any): bigint | null => {
+    const type = tx.transactionType.__kind__;
+    if (type === "deposit") return tx.transactionType.deposit.amount;
+    if (type === "withdrawal") return tx.transactionType.withdrawal.amount;
+    if (type === "bet") return tx.transactionType.bet.amount ?? null;
+    if (type === "payout") return tx.transactionType.payout.amount ?? null;
+    return null;
+  };
+
   const statusBadge = (status: Variant_pending_approved_rejected) => {
     if (status === Variant_pending_approved_rejected.approved)
       return (
@@ -127,8 +142,17 @@ export default function WalletPage() {
               Your Balance
             </p>
             <p className="text-5xl font-bold text-gold">
-              ₹{profile?.wallet?.toString() ?? "0"}
+              ₹{(profile as any)?.wallet?.toString() ?? "0"}
             </p>
+            {(profile as any)?.userId != null && (
+              <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                <Hash className="w-3 h-3" />
+                User ID:{" "}
+                <span className="font-mono font-bold text-foreground">
+                  #{(profile as any).userId.toString().padStart(4, "0")}
+                </span>
+              </p>
+            )}
           </div>
           <div className="w-20 h-20 rounded-full border-2 border-gold/30 bg-gold/10 flex items-center justify-center">
             <Wallet className="w-8 h-8 text-gold" />
@@ -259,7 +283,7 @@ export default function WalletPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {!transactions || transactions.length === 0 ? (
+          {!transactions || (transactions as any[]).length === 0 ? (
             <div
               data-ocid="transactions.empty_state"
               className="text-center py-10 text-muted-foreground text-sm"
@@ -285,14 +309,15 @@ export default function WalletPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((tx, idx) => {
+                {(transactions as any[]).map((tx: any, idx: number) => {
                   const type = tx.transactionType.__kind__;
-                  const amount =
-                    type === "deposit"
-                      ? tx.transactionType.deposit.amount
-                      : type === "withdrawal"
-                        ? tx.transactionType.withdrawal.amount
-                        : null;
+                  const amount = getTransactionAmount(tx);
+                  const isRejected =
+                    tx.status === Variant_pending_approved_rejected.rejected;
+                  const rejectionReason =
+                    isRejected && tx.rejectionReason
+                      ? tx.rejectionReason
+                      : null;
                   return (
                     <TableRow
                       key={tx.transactionId.toString()}
@@ -312,7 +337,16 @@ export default function WalletPage() {
                           Number(tx.timestamp) / 1_000_000,
                         ).toLocaleDateString()}
                       </TableCell>
-                      <TableCell>{statusBadge(tx.status)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          {statusBadge(tx.status)}
+                          {rejectionReason && (
+                            <p className="text-xs text-destructive italic">
+                              Reason: {rejectionReason}
+                            </p>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   );
                 })}
