@@ -19,7 +19,7 @@ function getInitialTab(): Tab {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
-  const { identity } = useInternetIdentity();
+  const { identity, isInitializing } = useInternetIdentity();
   const { data: isAdmin } = useIsAdmin();
 
   const handleSetTab = useCallback((tab: Tab) => {
@@ -27,15 +27,16 @@ export default function App() {
     window.location.hash = tab === "home" ? "" : tab;
   }, []);
 
-  // If not logged in and on auth-required tab, go back to home
+  // Wait for auth to initialize before redirecting away from protected tabs
   useEffect(() => {
+    if (isInitializing) return;
     if (
       !identity &&
       (activeTab === "wallet" || activeTab === "bets" || activeTab === "admin")
     ) {
       handleSetTab("home");
     }
-  }, [identity, activeTab, handleSetTab]);
+  }, [identity, isInitializing, activeTab, handleSetTab]);
 
   // If not admin and on admin tab, go to home
   useEffect(() => {
