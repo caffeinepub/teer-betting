@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("/assets/fonts/PlusJakartaSans.woff2") format("woff2");
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 0.75rem;
+    /* Dark theme - always dark for this app */
+    --background: 0.12 0.02 240;
+    --foreground: 0.97 0.005 240;
+    --card: 0.19 0.028 240;
+    --card-foreground: 0.97 0.005 240;
+    --popover: 0.22 0.03 240;
+    --popover-foreground: 0.97 0.005 240;
+    --primary: 0.79 0.22 148;
+    --primary-foreground: 0.12 0.02 240;
+    --secondary: 0.22 0.03 240;
+    --secondary-foreground: 0.97 0.005 240;
+    --muted: 0.19 0.028 240;
+    --muted-foreground: 0.72 0.022 240;
+    --accent: 0.83 0.155 87;
+    --accent-foreground: 0.12 0.02 240;
+    --destructive: 0.62 0.22 25;
+    --destructive-foreground: 0.97 0.005 240;
+    --border: 0.28 0.025 240;
+    --input: 0.25 0.025 240;
+    --ring: 0.79 0.22 148;
+    --chart-1: 0.79 0.22 148;
+    --chart-2: 0.83 0.155 87;
+    --chart-3: 0.62 0.15 240;
+    --chart-4: 0.72 0.18 165;
+    --chart-5: 0.65 0.2 25;
+    --sidebar: 0.15 0.025 240;
+    --sidebar-foreground: 0.97 0.005 240;
+    --sidebar-primary: 0.79 0.22 148;
+    --sidebar-primary-foreground: 0.12 0.02 240;
+    --sidebar-accent: 0.22 0.03 240;
+    --sidebar-accent-foreground: 0.97 0.005 240;
+    --sidebar-border: 0.28 0.025 240;
+    --sidebar-ring: 0.79 0.22 148;
+    /* Custom brand tokens */
+    --neon: 0.79 0.22 148;
+    --gold: 0.83 0.155 87;
+    --bg-deep: 0.12 0.02 240;
+    --bg-card: 0.19 0.028 240;
+    --bg-card2: 0.22 0.03 240;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-jakarta;
+    background: linear-gradient(
+      135deg,
+      oklch(0.12 0.02 240) 0%,
+      oklch(0.15 0.025 240) 100%
+    );
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .text-neon {
+    color: oklch(0.79 0.22 148);
+  }
+  .text-gold {
+    color: oklch(0.83 0.155 87);
+  }
+  .bg-neon {
+    background-color: oklch(0.79 0.22 148);
+  }
+  .bg-gold {
+    background-color: oklch(0.83 0.155 87);
+  }
+  .border-neon {
+    border-color: oklch(0.79 0.22 148);
+  }
+  .border-gold {
+    border-color: oklch(0.83 0.155 87);
+  }
+  .neon-glow {
+    box-shadow: 0 0 16px oklch(0.79 0.22 148 / 0.4);
+  }
+  .gold-glow {
+    box-shadow: 0 0 16px oklch(0.83 0.155 87 / 0.4);
+  }
+  .bg-card-deep {
+    background-color: oklch(0.19 0.028 240);
+  }
+  .bg-card-mid {
+    background-color: oklch(0.22 0.03 240);
+  }
+}
