@@ -13,6 +13,7 @@ import {
 import {
   ArrowDownCircle,
   ArrowUpCircle,
+  Copy,
   Hash,
   Loader2,
   Wallet,
@@ -27,6 +28,8 @@ import {
   useCreateWithdrawal,
   useUserProfile,
 } from "../hooks/useQueries";
+
+const ADMIN_UPI = "rohim.b@ptyes";
 
 export default function WalletPage() {
   const { identity, login } = useInternetIdentity();
@@ -170,6 +173,32 @@ export default function WalletPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* UPI ID to pay to */}
+            <div className="rounded-lg border border-neon/30 bg-neon/5 p-3 space-y-1">
+              <p className="text-xs text-muted-foreground font-semibold uppercase">
+                Pay to this UPI ID
+              </p>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono font-bold text-neon text-lg tracking-wide">
+                  {ADMIN_UPI}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(ADMIN_UPI);
+                    toast.success("UPI ID copied!");
+                  }}
+                  className="text-muted-foreground hover:text-neon transition-colors"
+                  title="Copy UPI ID"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Send money to the above UPI ID, then fill in the details below.
+              </p>
+            </div>
+
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground font-semibold uppercase">
                 Amount (₹)

@@ -44,8 +44,8 @@ const HOW_IT_WORKS = [
   {
     id: "win",
     icon: <Trophy className="w-8 h-8 text-gold" />,
-    title: "Win 8X Profit",
-    desc: "If your number is drawn, you win 8 times your bet amount instantly!",
+    title: "Win 80X Profit",
+    desc: "If your number is drawn, you win 80 times your bet amount instantly!",
   },
 ];
 
@@ -148,11 +148,12 @@ export default function HomePage({ setTab }: HomePageProps) {
               <br />
               NUMBERS.
               <br />
-              <span className="text-gold">WIN 8X PROFIT!</span>
+              <span className="text-gold">WIN 80X PROFIT!</span>
             </h1>
             <p className="text-muted-foreground text-base max-w-md">
-              Pick any number from 00 to 99, place your bet and win 8 times your
-              stake instantly when your number hits. Fast, fair, and thrilling.
+              Pick any number from 00 to 99, place your bet and win 80 times
+              your stake instantly when your number hits. Fast, fair, and
+              thrilling.
             </p>
             <div className="flex flex-wrap gap-3">
               {isLoggedIn ? (
@@ -201,7 +202,7 @@ export default function HomePage({ setTab }: HomePageProps) {
               <div className="w-48 h-48 rounded-2xl border-2 border-neon/30 bg-card-mid flex flex-col items-center justify-center gap-3 neon-glow">
                 <TrendingUp className="w-12 h-12 text-neon" />
                 <div className="text-center">
-                  <p className="text-4xl font-bold text-neon">8X</p>
+                  <p className="text-4xl font-bold text-neon">80X</p>
                   <p className="text-xs text-muted-foreground uppercase tracking-widest">
                     Profit
                   </p>
@@ -332,7 +333,7 @@ export default function HomePage({ setTab }: HomePageProps) {
                           {(
                             selectedNumbers.length *
                             Number.parseInt(betAmount || "0") *
-                            8
+                            80
                           ).toLocaleString()}
                         </span>
                       </p>
@@ -518,7 +519,7 @@ export default function HomePage({ setTab }: HomePageProps) {
                         </TableCell>
                         <TableCell>
                           <Badge className="bg-gold/20 text-gold border-gold/30 border text-xs">
-                            8X
+                            80X
                           </Badge>
                         </TableCell>
                       </TableRow>

@@ -49,6 +49,7 @@ export type UserRole = { 'admin' : null } |
   { 'guest' : null };
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
+  'addBalance' : ActorMethod<[Principal, bigint], undefined>,
   'approveTransaction' : ActorMethod<[TransactionId], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'closeDraw' : ActorMethod<[DrawId], undefined>,

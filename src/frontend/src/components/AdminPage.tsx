@@ -30,6 +30,7 @@ import type { UserProfileAdmin } from "../backend.d";
 import { Variant_pending_approved_rejected } from "../backend.d";
 import {
   useActiveDraw,
+  useAddBalance,
   useAllBets,
   useAllTransactions,
   useAllUserProfiles,
@@ -58,6 +59,7 @@ export default function AdminPage() {
   const approveTransaction = useApproveTransaction();
   const rejectWithReason = useRejectTransactionWithReason();
   const deductBalance = useDeductBalance();
+  const addBalance = useAddBalance();
   const getUserById = useGetUserByUserId();
 
   const [winnerNumber, setWinnerNumber] = useState("");
@@ -76,6 +78,10 @@ export default function AdminPage() {
     {},
   );
   const [deductMap, setDeductMap] = useState<Record<string, string>>({});
+
+  // Add balance state
+  const [showAddForm, setShowAddForm] = useState<Record<string, boolean>>({});
+  const [addMap, setAddMap] = useState<Record<string, string>>({});
 
   // User search state
   const [userSearchId, setUserSearchId] = useState("");
@@ -190,6 +196,26 @@ export default function AdminPage() {
       setDeductMap((prev) => ({ ...prev, [principalStr]: "" }));
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to deduct balance");
+    }
+  };
+
+  const handleAddBalance = async (principalStr: string, userPrincipal: any) => {
+    const amountStr = addMap[principalStr] ?? "";
+    const amount = Number.parseInt(amountStr);
+    if (Number.isNaN(amount) || amount <= 0) {
+      toast.error("Enter a valid amount to add");
+      return;
+    }
+    try {
+      await addBalance.mutateAsync({
+        user: userPrincipal,
+        amount: BigInt(amount),
+      });
+      toast.success(`Added ₹${amount} to user`);
+      setShowAddForm((prev) => ({ ...prev, [principalStr]: false }));
+      setAddMap((prev) => ({ ...prev, [principalStr]: "" }));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to add balance");
     }
   };
 
@@ -1091,6 +1117,75 @@ export default function AdminPage() {
                                       variant="ghost"
                                       onClick={() =>
                                         setShowDeductForm((prev) => ({
+                                          ...prev,
+                                          [principalStr]: false,
+                                        }))
+                                      }
+                                      className="text-xs h-7"
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            {/* Add Balance */}
+                            <div className="flex flex-col gap-1.5">
+                              <Button
+                                data-ocid={`admin.users.add.${userIdx + 1}`}
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  setShowAddForm((prev) => ({
+                                    ...prev,
+                                    [principalStr]: !prev[principalStr],
+                                  }))
+                                }
+                                className="border-neon text-neon hover:bg-neon/10 rounded-full text-xs px-3 h-7"
+                              >
+                                Add Balance
+                              </Button>
+                              {showAddForm[principalStr] && (
+                                <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-card-mid border border-neon/30">
+                                  <Input
+                                    data-ocid={`admin.users.add_amount.${userIdx + 1}`}
+                                    type="number"
+                                    min="1"
+                                    placeholder="Amount to add"
+                                    value={addMap[principalStr] ?? ""}
+                                    onChange={(e) =>
+                                      setAddMap((prev) => ({
+                                        ...prev,
+                                        [principalStr]: e.target.value,
+                                      }))
+                                    }
+                                    className="text-xs bg-card-deep border-border h-7 px-2"
+                                  />
+                                  <div className="flex gap-2">
+                                    <Button
+                                      data-ocid={`admin.users.confirm_add.${userIdx + 1}`}
+                                      size="sm"
+                                      onClick={() =>
+                                        handleAddBalance(
+                                          principalStr,
+                                          userItem.user,
+                                        )
+                                      }
+                                      disabled={addBalance.isPending}
+                                      className="bg-neon text-black hover:bg-neon/90 font-bold rounded-full text-xs px-3 h-7"
+                                    >
+                                      {addBalance.isPending ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        "Confirm"
+                                      )}
+                                    </Button>
+                                    <Button
+                                      data-ocid={`admin.users.cancel_add.${userIdx + 1}`}
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        setShowAddForm((prev) => ({
                                           ...prev,
                                           [principalStr]: false,
                                         }))

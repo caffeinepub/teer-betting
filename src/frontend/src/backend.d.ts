@@ -90,6 +90,7 @@ export interface backendInterface {
     closeDraw(drawId: DrawId): Promise<void>;
     createDepositRequest(amount: bigint, upiRef: string): Promise<TransactionId>;
     createWithdrawalRequest(amount: bigint, upiId: string): Promise<TransactionId>;
+    addBalance(user: Principal, amount: bigint): Promise<void>;
     deductBalance(user: Principal, amount: bigint): Promise<void>;
     getActiveDraw(): Promise<Draw | null>;
     getAllBets(): Promise<Array<Bet>>;

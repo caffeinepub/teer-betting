@@ -332,3 +332,23 @@ export function useSettleDraw() {
     },
   });
 }
+
+export function useAddBalance() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      user,
+      amount,
+    }: {
+      user: Principal;
+      amount: bigint;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).addBalance(user, amount);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["allUserProfiles"] });
+    },
+  });
+}

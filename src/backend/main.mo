@@ -214,6 +214,7 @@ actor {
     ignore ensureProfile(caller);
   };
 
+
   public query ({ caller }) func getAllUserProfiles() : async [UserProfileAdmin] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can view all user profiles");
@@ -261,6 +262,27 @@ actor {
     nextTransactionId += 1;
   };
 
+
+  // ── Admin: add balance ───────────────────────────────────────────────────────
+
+  public shared ({ caller }) func addBalance(user : Principal, amount : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add balance");
+    };
+    if (amount == 0) { Runtime.trap("Amount must be greater than zero") };
+    let profile = ensureProfile(user);
+    profileMap.add(user, { profile with wallet = profile.wallet + amount });
+    let transaction = {
+      transactionId = nextTransactionId;
+      user;
+      transactionType = #deposit({ upiRef = "admin-credit"; amount });
+      status = #approved;
+      rejectionReason = null;
+      timestamp = Time.now();
+    };
+    txMap.add(transaction.transactionId, transaction);
+    nextTransactionId += 1;
+  };
   // ── Deposits / withdrawals ────────────────────────────────────────────────────
 
   public shared ({ caller }) func createDepositRequest(amount : Nat, upiRef : Text) : async TransactionId {
@@ -389,7 +411,7 @@ actor {
         case (null) { continue };
         case (?p) { p };
       };
-      let payout = bet.amount * 8;
+      let payout = bet.amount * 80;
       profileMap.add(bet.player, { profile with wallet = profile.wallet + payout });
       txMap.add(nextTransactionId, {
         transactionId = nextTransactionId;

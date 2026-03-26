@@ -60,6 +60,7 @@ export const UserProfileAdmin = IDL.Record({
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+  'addBalance' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
   'approveTransaction' : IDL.Func([TransactionId], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'closeDraw' : IDL.Func([DrawId], [], []),
@@ -154,6 +155,7 @@ export const idlFactory = ({ IDL }) => {
   });
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
+    'addBalance' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
     'approveTransaction' : IDL.Func([TransactionId], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'closeDraw' : IDL.Func([DrawId], [], []),
