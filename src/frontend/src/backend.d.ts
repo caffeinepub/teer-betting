@@ -32,13 +32,14 @@ export interface Draw {
     };
     createdAt: Time;
 }
-export type DrawId = bigint;
-export interface UserProfilePublic {
+export interface UserProfileAdmin {
     userId: bigint;
+    isBlocked: boolean;
+    user: Principal;
     wallet: bigint;
 }
-export interface UserProfileAdmin {
-    user: Principal;
+export type DrawId = bigint;
+export interface UserProfilePublic {
     userId: bigint;
     wallet: bigint;
 }
@@ -69,8 +70,8 @@ export interface Transaction {
             amount: bigint;
         };
     };
-    rejectionReason: string | null;
     user: Principal;
+    rejectionReason?: string;
     timestamp: Time;
     transactionId: TransactionId;
 }
@@ -85,13 +86,15 @@ export enum Variant_pending_approved_rejected {
     rejected = "rejected"
 }
 export interface backendInterface {
+    addBalance(user: Principal, amount: bigint): Promise<void>;
     approveTransaction(transactionId: TransactionId): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
+    blockUser(user: Principal): Promise<void>;
     closeDraw(drawId: DrawId): Promise<void>;
     createDepositRequest(amount: bigint, upiRef: string): Promise<TransactionId>;
     createWithdrawalRequest(amount: bigint, upiId: string): Promise<TransactionId>;
-    addBalance(user: Principal, amount: bigint): Promise<void>;
     deductBalance(user: Principal, amount: bigint): Promise<void>;
+    deleteDraw(drawId: DrawId): Promise<void>;
     getActiveDraw(): Promise<Draw | null>;
     getAllBets(): Promise<Array<Bet>>;
     getAllTransactions(): Promise<Array<Transaction>>;
@@ -103,13 +106,18 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getDrawHistory(): Promise<Array<Draw>>;
     getPendingRequests(): Promise<Array<Transaction>>;
+    getUserBets(user: Principal): Promise<Array<Bet>>;
     getUserByUserId(userId: bigint): Promise<UserProfileAdmin | null>;
     getUserProfile(user: Principal): Promise<UserProfilePublic | null>;
+    getUserTransactions(user: Principal): Promise<Array<Transaction>>;
     isCallerAdmin(): Promise<boolean>;
+    isCallerBlocked(): Promise<boolean>;
     placeBet(drawId: DrawId, number: bigint, amount: bigint): Promise<BetId>;
+    rejectBet(betId: BetId): Promise<void>;
     rejectTransaction(transactionId: TransactionId): Promise<void>;
     rejectTransactionWithReason(transactionId: TransactionId, reason: string): Promise<void>;
-    saveCallerUserProfile(profile: UserProfilePublic): Promise<void>;
+    saveCallerUserProfile(arg0: UserProfilePublic): Promise<void>;
     settleDraw(drawId: DrawId, winningNumber: bigint): Promise<void>;
     startDraw(): Promise<DrawId>;
+    unblockUser(user: Principal): Promise<void>;
 }

@@ -18,6 +18,7 @@ import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
   useActiveDraw,
   useDrawHistory,
+  useIsCallerBlocked,
   usePlaceBet,
 } from "../hooks/useQueries";
 import NumberGrid from "./NumberGrid";
@@ -60,6 +61,7 @@ export default function HomePage({ setTab }: HomePageProps) {
   const isLoggedIn = !!identity;
   const { data: activeDraw, isLoading: drawLoading } = useActiveDraw();
   const { data: history } = useDrawHistory();
+  const { data: isBlocked } = useIsCallerBlocked();
   const placeBet = usePlaceBet();
 
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
@@ -90,6 +92,26 @@ export default function HomePage({ setTab }: HomePageProps) {
     setHousePickNote(false);
   };
 
+  const handleToggleRow = (rowDigit: number) => {
+    const rowNums = Array.from({ length: 10 }, (_, i) => rowDigit * 10 + i);
+    const allSelected = rowNums.every((n) => selectedNumbers.includes(n));
+    if (allSelected) {
+      setSelectedNumbers((prev) => prev.filter((n) => !rowNums.includes(n)));
+    } else {
+      setSelectedNumbers((prev) => [...new Set([...prev, ...rowNums])]);
+    }
+  };
+
+  const handleToggleCol = (colDigit: number) => {
+    const colNums = Array.from({ length: 10 }, (_, i) => i * 10 + colDigit);
+    const allSelected = colNums.every((n) => selectedNumbers.includes(n));
+    if (allSelected) {
+      setSelectedNumbers((prev) => prev.filter((n) => !colNums.includes(n)));
+    } else {
+      setSelectedNumbers((prev) => [...new Set([...prev, ...colNums])]);
+    }
+  };
+
   const handlePlaceBet = async () => {
     if (!activeDraw) return;
     if (selectedNumbers.length === 0) {
@@ -118,9 +140,10 @@ export default function HomePage({ setTab }: HomePageProps) {
     }
   };
 
-  const settledHistory = (history ?? []).filter(
-    (d) => d.status.__kind__ === "settled",
-  );
+  const settledHistory = (history ?? [])
+    .filter((d) => d.status.__kind__ === "settled")
+    .slice()
+    .reverse();
 
   const isDrawOpen = activeDraw?.status.__kind__ === "open";
   const isInteractive = isLoggedIn;
@@ -288,10 +311,18 @@ export default function HomePage({ setTab }: HomePageProps) {
                   )}
                 </div>
 
+                {isBlocked && (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive font-semibold">
+                    Your account has been blocked. Betting is disabled. Contact
+                    support.
+                  </div>
+                )}
                 <NumberGrid
                   selected={selectedNumbers}
                   onToggle={toggleNumber}
-                  disabled={placeBet.isPending}
+                  disabled={placeBet.isPending || !!isBlocked}
+                  onToggleRow={handleToggleRow}
+                  onToggleCol={handleToggleCol}
                 />
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
                   <div className="space-y-1 flex-1">
@@ -358,7 +389,8 @@ export default function HomePage({ setTab }: HomePageProps) {
                         placeBet.isPending ||
                         selectedNumbers.length === 0 ||
                         !betAmount ||
-                        !isDrawOpen
+                        !isDrawOpen ||
+                        !!isBlocked
                       }
                       className="bg-neon text-black hover:bg-neon/90 font-bold rounded-full px-8 neon-glow"
                     >

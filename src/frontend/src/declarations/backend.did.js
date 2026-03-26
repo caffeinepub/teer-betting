@@ -46,14 +46,18 @@ export const Transaction = IDL.Record({
     'withdrawal' : IDL.Record({ 'upiId' : IDL.Text, 'amount' : IDL.Nat }),
     'payout' : IDL.Record({ 'betId' : BetId, 'amount' : IDL.Nat }),
   }),
-  'rejectionReason' : IDL.Opt(IDL.Text),
   'user' : IDL.Principal,
+  'rejectionReason' : IDL.Opt(IDL.Text),
   'timestamp' : Time,
   'transactionId' : TransactionId,
 });
-export const UserProfilePublic = IDL.Record({ 'userId' : IDL.Nat, 'wallet' : IDL.Nat });
 export const UserProfileAdmin = IDL.Record({
+  'userId' : IDL.Nat,
+  'isBlocked' : IDL.Bool,
   'user' : IDL.Principal,
+  'wallet' : IDL.Nat,
+});
+export const UserProfilePublic = IDL.Record({
   'userId' : IDL.Nat,
   'wallet' : IDL.Nat,
 });
@@ -63,6 +67,7 @@ export const idlService = IDL.Service({
   'addBalance' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
   'approveTransaction' : IDL.Func([TransactionId], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'blockUser' : IDL.Func([IDL.Principal], [], []),
   'closeDraw' : IDL.Func([DrawId], [], []),
   'createDepositRequest' : IDL.Func([IDL.Nat, IDL.Text], [TransactionId], []),
   'createWithdrawalRequest' : IDL.Func(
@@ -71,6 +76,7 @@ export const idlService = IDL.Service({
       [],
     ),
   'deductBalance' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
+  'deleteDraw' : IDL.Func([DrawId], [], []),
   'getActiveDraw' : IDL.Func([], [IDL.Opt(Draw)], ['query']),
   'getAllBets' : IDL.Func([], [IDL.Vec(Bet)], ['query']),
   'getAllTransactions' : IDL.Func([], [IDL.Vec(Transaction)], ['query']),
@@ -86,19 +92,32 @@ export const idlService = IDL.Service({
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getDrawHistory' : IDL.Func([], [IDL.Vec(Draw)], ['query']),
   'getPendingRequests' : IDL.Func([], [IDL.Vec(Transaction)], ['query']),
-  'getUserByUserId' : IDL.Func([IDL.Nat], [IDL.Opt(UserProfileAdmin)], ['query']),
+  'getUserBets' : IDL.Func([IDL.Principal], [IDL.Vec(Bet)], ['query']),
+  'getUserByUserId' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Opt(UserProfileAdmin)],
+      ['query'],
+    ),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
       [IDL.Opt(UserProfilePublic)],
       ['query'],
     ),
+  'getUserTransactions' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Vec(Transaction)],
+      ['query'],
+    ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'isCallerBlocked' : IDL.Func([], [IDL.Bool], ['query']),
   'placeBet' : IDL.Func([DrawId, IDL.Nat, IDL.Nat], [BetId], []),
+  'rejectBet' : IDL.Func([BetId], [], []),
   'rejectTransaction' : IDL.Func([TransactionId], [], []),
   'rejectTransactionWithReason' : IDL.Func([TransactionId, IDL.Text], [], []),
-  'saveCallerUserProfile' : IDL.Func([UserProfilePublic], undefined, []),
+  'saveCallerUserProfile' : IDL.Func([UserProfilePublic], [], []),
   'settleDraw' : IDL.Func([DrawId, IDL.Nat], [], []),
   'startDraw' : IDL.Func([], [DrawId], []),
+  'unblockUser' : IDL.Func([IDL.Principal], [], []),
 });
 
 export const idlInitArgs = [];
@@ -142,22 +161,28 @@ export const idlFactory = ({ IDL }) => {
       'withdrawal' : IDL.Record({ 'upiId' : IDL.Text, 'amount' : IDL.Nat }),
       'payout' : IDL.Record({ 'betId' : BetId, 'amount' : IDL.Nat }),
     }),
-    'rejectionReason' : IDL.Opt(IDL.Text),
     'user' : IDL.Principal,
+    'rejectionReason' : IDL.Opt(IDL.Text),
     'timestamp' : Time,
     'transactionId' : TransactionId,
   });
-  const UserProfilePublic = IDL.Record({ 'userId' : IDL.Nat, 'wallet' : IDL.Nat });
   const UserProfileAdmin = IDL.Record({
+    'userId' : IDL.Nat,
+    'isBlocked' : IDL.Bool,
     'user' : IDL.Principal,
+    'wallet' : IDL.Nat,
+  });
+  const UserProfilePublic = IDL.Record({
     'userId' : IDL.Nat,
     'wallet' : IDL.Nat,
   });
+  
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'addBalance' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
     'approveTransaction' : IDL.Func([TransactionId], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+    'blockUser' : IDL.Func([IDL.Principal], [], []),
     'closeDraw' : IDL.Func([DrawId], [], []),
     'createDepositRequest' : IDL.Func([IDL.Nat, IDL.Text], [TransactionId], []),
     'createWithdrawalRequest' : IDL.Func(
@@ -166,6 +191,7 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'deductBalance' : IDL.Func([IDL.Principal, IDL.Nat], [], []),
+    'deleteDraw' : IDL.Func([DrawId], [], []),
     'getActiveDraw' : IDL.Func([], [IDL.Opt(Draw)], ['query']),
     'getAllBets' : IDL.Func([], [IDL.Vec(Bet)], ['query']),
     'getAllTransactions' : IDL.Func([], [IDL.Vec(Transaction)], ['query']),
@@ -181,19 +207,32 @@ export const idlFactory = ({ IDL }) => {
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getDrawHistory' : IDL.Func([], [IDL.Vec(Draw)], ['query']),
     'getPendingRequests' : IDL.Func([], [IDL.Vec(Transaction)], ['query']),
-    'getUserByUserId' : IDL.Func([IDL.Nat], [IDL.Opt(UserProfileAdmin)], ['query']),
+    'getUserBets' : IDL.Func([IDL.Principal], [IDL.Vec(Bet)], ['query']),
+    'getUserByUserId' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Opt(UserProfileAdmin)],
+        ['query'],
+      ),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
         [IDL.Opt(UserProfilePublic)],
         ['query'],
       ),
+    'getUserTransactions' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Vec(Transaction)],
+        ['query'],
+      ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'isCallerBlocked' : IDL.Func([], [IDL.Bool], ['query']),
     'placeBet' : IDL.Func([DrawId, IDL.Nat, IDL.Nat], [BetId], []),
+    'rejectBet' : IDL.Func([BetId], [], []),
     'rejectTransaction' : IDL.Func([TransactionId], [], []),
     'rejectTransactionWithReason' : IDL.Func([TransactionId, IDL.Text], [], []),
-    'saveCallerUserProfile' : IDL.Func([UserProfilePublic], undefined, []),
+    'saveCallerUserProfile' : IDL.Func([UserProfilePublic], [], []),
     'settleDraw' : IDL.Func([DrawId, IDL.Nat], [], []),
     'startDraw' : IDL.Func([], [DrawId], []),
+    'unblockUser' : IDL.Func([IDL.Principal], [], []),
   });
 };
 

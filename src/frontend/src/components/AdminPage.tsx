@@ -15,18 +15,23 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Activity,
   BadgeDollarSign,
+  Ban,
+  BarChart2,
+  CheckCircle,
   CreditCard,
+  History,
   ListOrdered,
   Loader2,
   Play,
   Search,
   Square,
+  Trash2,
   Trophy,
   Users,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { UserProfileAdmin } from "../backend.d";
+import type { Transaction, UserProfileAdmin } from "../backend.d";
 import { Variant_pending_approved_rejected } from "../backend.d";
 import {
   useActiveDraw,
@@ -35,14 +40,19 @@ import {
   useAllTransactions,
   useAllUserProfiles,
   useApproveTransaction,
+  useBlockUser,
   useCloseDraw,
   useDeductBalance,
+  useDeleteDraw,
   useDrawHistory,
+  useGetUserBets,
   useGetUserByUserId,
+  useGetUserTransactions,
   usePendingRequests,
   useRejectTransactionWithReason,
   useSettleDraw,
   useStartDraw,
+  useUnblockUser,
 } from "../hooks/useQueries";
 
 export default function AdminPage() {
@@ -61,6 +71,11 @@ export default function AdminPage() {
   const deductBalance = useDeductBalance();
   const addBalance = useAddBalance();
   const getUserById = useGetUserByUserId();
+  const blockUser = useBlockUser();
+  const unblockUser = useUnblockUser();
+  const getUserTransactions = useGetUserTransactions();
+  const deleteDraw = useDeleteDraw();
+  const getUserBets = useGetUserBets();
 
   const [winnerNumber, setWinnerNumber] = useState("");
   const [activeAdminTab, setActiveAdminTab] = useState("draws");
@@ -92,6 +107,25 @@ export default function AdminPage() {
   // Draw history settle state
   const [settleHistoryMap, setSettleHistoryMap] = useState<
     Record<string, string>
+  >({});
+
+  // User transaction history state
+  const [userTxHistory, setUserTxHistory] = useState<
+    Record<string, Transaction[]>
+  >({});
+  const [showTxHistory, setShowTxHistory] = useState<Record<string, boolean>>(
+    {},
+  );
+
+  // Reject bet state
+
+  // User bets state
+  const [userBets, setUserBets] = useState<Record<string, any[]>>({});
+  const [showUserBets, setShowUserBets] = useState<Record<string, boolean>>({});
+
+  // Delete draw state
+  const [showDeleteDrawConfirm, setShowDeleteDrawConfirm] = useState<
+    Record<string, boolean>
   >({});
 
   const handleStartDraw = async () => {
@@ -234,6 +268,71 @@ export default function AdminPage() {
     }
   };
 
+  const handleBlockUser = async (_principalStr: string, userPrincipal: any) => {
+    try {
+      await blockUser.mutateAsync(userPrincipal);
+      toast.success("User blocked successfully");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to block user");
+    }
+  };
+
+  const handleUnblockUser = async (
+    _principalStr: string,
+    userPrincipal: any,
+  ) => {
+    try {
+      await unblockUser.mutateAsync(userPrincipal);
+      toast.success("User unblocked successfully");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to unblock user");
+    }
+  };
+
+  const handleViewHistory = async (
+    principalStr: string,
+    userPrincipal: any,
+  ) => {
+    if (showTxHistory[principalStr]) {
+      setShowTxHistory((prev) => ({ ...prev, [principalStr]: false }));
+      return;
+    }
+    try {
+      const txs = await getUserTransactions.mutateAsync(userPrincipal);
+      setUserTxHistory((prev) => ({ ...prev, [principalStr]: txs }));
+      setShowTxHistory((prev) => ({ ...prev, [principalStr]: true }));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load transaction history");
+    }
+  };
+
+  const handleDeleteDraw = async (drawIdStr: string) => {
+    try {
+      await deleteDraw.mutateAsync(BigInt(drawIdStr));
+      toast.success(`Draw #${drawIdStr} deleted`);
+      setShowDeleteDrawConfirm((prev) => ({ ...prev, [drawIdStr]: false }));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to delete draw");
+    }
+  };
+
+  const handleViewUserBets = async (
+    principalStr: string,
+    userPrincipal: any,
+  ) => {
+    if (showUserBets[principalStr]) {
+      setShowUserBets((prev) => ({ ...prev, [principalStr]: false }));
+      return;
+    }
+    try {
+      const bets = await getUserBets.mutateAsync(userPrincipal);
+      setUserBets((prev) => ({ ...prev, [principalStr]: bets }));
+      setShowUserBets((prev) => ({ ...prev, [principalStr]: true }));
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load user bets");
+    }
+  };
+
   const statusBadge = (status: Variant_pending_approved_rejected) => {
     if (status === Variant_pending_approved_rejected.approved)
       return (
@@ -267,12 +366,47 @@ export default function AdminPage() {
       icon: <ListOrdered className="w-4 h-4" />,
       tab: "bets",
     },
+    {
+      label: "Bet Stats",
+      icon: <BarChart2 className="w-4 h-4" />,
+      tab: "betstats",
+    },
   ];
 
   const pendingCount = (pendingRequests as any[])?.length ?? 0;
   const totalBetAmount =
     allBets?.reduce((sum, bet) => sum + Number(bet.amount), 0) ?? 0;
   const usersArr: UserProfileAdmin[] = (allUsers as any) ?? [];
+
+  // Compute bets per number for current/latest draw only
+  const latestDraw =
+    drawHistory && drawHistory.length > 0
+      ? drawHistory[drawHistory.length - 1]
+      : null;
+  const currentDrawForStats = activeDraw || latestDraw;
+  const statsDrawId = currentDrawForStats?.id;
+
+  const betsByNumber: Record<number, number> = {};
+  for (let i = 0; i <= 99; i++) betsByNumber[i] = 0;
+  if (allBets && statsDrawId !== undefined) {
+    for (const bet of allBets) {
+      if (bet.drawId === statsDrawId) {
+        const n = Number(bet.number);
+        if (n >= 0 && n <= 99)
+          betsByNumber[n] = (betsByNumber[n] ?? 0) + Number(bet.amount);
+      }
+    }
+  }
+
+  const statsDrawAmount = Object.values(betsByNumber).reduce(
+    (s, v) => s + v,
+    0,
+  );
+  const top3Numbers = Object.entries(betsByNumber)
+    .filter(([, amt]) => amt > 0)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3)
+    .map(([n]) => Number(n));
 
   const STATS = [
     {
@@ -311,6 +445,348 @@ export default function AdminPage() {
       bg: "bg-gold/10",
     },
   ];
+
+  // Reusable user action panel (used in both user table and search result)
+  const renderUserActions = (
+    userItem: any,
+    principalStr: string,
+    idxKey: string,
+  ) => (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {/* Block / Unblock */}
+        {userItem.isBlocked ? (
+          <Button
+            data-ocid={`admin.users.unblock.${idxKey}`}
+            size="sm"
+            variant="outline"
+            onClick={() => handleUnblockUser(principalStr, userItem.user)}
+            disabled={unblockUser.isPending}
+            className="border-neon text-neon hover:bg-neon/10 rounded-full text-xs px-3 h-7"
+          >
+            <CheckCircle className="w-3 h-3 mr-1" />
+            Unblock
+          </Button>
+        ) : (
+          <Button
+            data-ocid={`admin.users.block.${idxKey}`}
+            size="sm"
+            variant="outline"
+            onClick={() => handleBlockUser(principalStr, userItem.user)}
+            disabled={blockUser.isPending}
+            className="border-destructive text-destructive hover:bg-destructive/10 rounded-full text-xs px-3 h-7"
+          >
+            <Ban className="w-3 h-3 mr-1" />
+            Block
+          </Button>
+        )}
+
+        {/* View Transaction History */}
+        <Button
+          data-ocid={`admin.users.history.${idxKey}`}
+          size="sm"
+          variant="outline"
+          onClick={() => handleViewHistory(principalStr, userItem.user)}
+          disabled={getUserTransactions.isPending}
+          className="border-blue-400 text-blue-400 hover:bg-blue-400/10 rounded-full text-xs px-3 h-7"
+        >
+          <History className="w-3 h-3 mr-1" />
+          {showTxHistory[principalStr] ? "Hide Tx" : "History"}
+        </Button>
+
+        {/* View Bets */}
+        <Button
+          data-ocid={`admin.users.bets.${idxKey}`}
+          size="sm"
+          variant="outline"
+          onClick={() => handleViewUserBets(principalStr, userItem.user)}
+          disabled={getUserBets.isPending}
+          className="border-purple-400 text-purple-400 hover:bg-purple-400/10 rounded-full text-xs px-3 h-7"
+        >
+          <ListOrdered className="w-3 h-3 mr-1" />
+          {showUserBets[principalStr] ? "Hide Bets" : "Bets"}
+        </Button>
+
+        {/* Deduct Balance */}
+        <Button
+          data-ocid={`admin.users.deduct.${idxKey}`}
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            setShowDeductForm((prev) => ({
+              ...prev,
+              [principalStr]: !prev[principalStr],
+            }))
+          }
+          className="border-destructive text-destructive hover:bg-destructive/10 rounded-full text-xs px-3 h-7"
+        >
+          Deduct
+        </Button>
+
+        {/* Add Balance */}
+        <Button
+          data-ocid={`admin.users.add.${idxKey}`}
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            setShowAddForm((prev) => ({
+              ...prev,
+              [principalStr]: !prev[principalStr],
+            }))
+          }
+          className="border-neon text-neon hover:bg-neon/10 rounded-full text-xs px-3 h-7"
+        >
+          Add
+        </Button>
+      </div>
+
+      {/* Deduct form */}
+      {showDeductForm[principalStr] && (
+        <div className="flex flex-col gap-1.5 mt-1 p-2 rounded-lg bg-card-mid border border-destructive/30">
+          <Input
+            data-ocid={`admin.users.deduct_amount.${idxKey}`}
+            type="number"
+            min="1"
+            placeholder="Amount to deduct"
+            value={deductMap[principalStr] ?? ""}
+            onChange={(e) =>
+              setDeductMap((prev) => ({
+                ...prev,
+                [principalStr]: e.target.value,
+              }))
+            }
+            className="text-xs bg-card-deep border-border h-7 px-2"
+          />
+          <div className="flex gap-2">
+            <Button
+              data-ocid={`admin.users.confirm_deduct.${idxKey}`}
+              size="sm"
+              onClick={() => handleDeductBalance(principalStr, userItem.user)}
+              disabled={deductBalance.isPending}
+              className="bg-destructive text-white hover:bg-destructive/90 font-bold rounded-full text-xs px-3 h-7"
+            >
+              {deductBalance.isPending ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                "Confirm"
+              )}
+            </Button>
+            <Button
+              data-ocid={`admin.users.cancel_deduct.${idxKey}`}
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                setShowDeductForm((prev) => ({
+                  ...prev,
+                  [principalStr]: false,
+                }))
+              }
+              className="text-xs h-7"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Add Balance form */}
+      {showAddForm[principalStr] && (
+        <div className="flex flex-col gap-1.5 mt-1 p-2 rounded-lg bg-card-mid border border-neon/30">
+          <Input
+            data-ocid={`admin.users.add_amount.${idxKey}`}
+            type="number"
+            min="1"
+            placeholder="Amount to add"
+            value={addMap[principalStr] ?? ""}
+            onChange={(e) =>
+              setAddMap((prev) => ({ ...prev, [principalStr]: e.target.value }))
+            }
+            className="text-xs bg-card-deep border-border h-7 px-2"
+          />
+          <div className="flex gap-2">
+            <Button
+              data-ocid={`admin.users.confirm_add.${idxKey}`}
+              size="sm"
+              onClick={() => handleAddBalance(principalStr, userItem.user)}
+              disabled={addBalance.isPending}
+              className="bg-neon text-black hover:bg-neon/90 font-bold rounded-full text-xs px-3 h-7"
+            >
+              {addBalance.isPending ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                "Confirm"
+              )}
+            </Button>
+            <Button
+              data-ocid={`admin.users.cancel_add.${idxKey}`}
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                setShowAddForm((prev) => ({ ...prev, [principalStr]: false }))
+              }
+              className="text-xs h-7"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction History */}
+      {showTxHistory[principalStr] && (
+        <div className="mt-2 p-3 rounded-lg bg-card-mid/50 border border-border space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1.5">
+            <History className="w-3.5 h-3.5" />
+            Deposit &amp; Withdrawal History
+          </p>
+          {(() => {
+            const txs = (userTxHistory[principalStr] ?? []).filter(
+              (tx) =>
+                tx.transactionType.__kind__ === "deposit" ||
+                tx.transactionType.__kind__ === "withdrawal",
+            );
+            if (txs.length === 0) {
+              return (
+                <p className="text-xs text-muted-foreground italic">
+                  No transaction history
+                </p>
+              );
+            }
+            return (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border">
+                    <TableHead className="text-muted-foreground text-xs">
+                      Type
+                    </TableHead>
+                    <TableHead className="text-muted-foreground text-xs">
+                      Amount
+                    </TableHead>
+                    <TableHead className="text-muted-foreground text-xs">
+                      Status
+                    </TableHead>
+                    <TableHead className="text-muted-foreground text-xs">
+                      Date
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {txs.map((tx) => {
+                    const isDeposit = tx.transactionType.__kind__ === "deposit";
+                    const amount = isDeposit
+                      ? (tx.transactionType as any).deposit.amount
+                      : (tx.transactionType as any).withdrawal.amount;
+                    return (
+                      <TableRow
+                        key={tx.transactionId.toString()}
+                        className="border-border"
+                      >
+                        <TableCell>
+                          <Badge
+                            className={`text-xs border ${
+                              isDeposit
+                                ? "bg-neon/20 text-neon border-neon/30"
+                                : "bg-gold/20 text-gold border-gold/30"
+                            }`}
+                          >
+                            {tx.transactionType.__kind__}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={`font-semibold text-sm ${isDeposit ? "text-neon" : "text-destructive"}`}
+                          >
+                            {isDeposit ? "+" : "-"}₹{amount.toString()}
+                          </span>
+                        </TableCell>
+                        <TableCell>{statusBadge(tx.status)}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {new Date(
+                            Number(tx.timestamp) / 1_000_000,
+                          ).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* User Bets */}
+      {showUserBets[principalStr] && (
+        <div className="mt-2 p-3 rounded-lg bg-card-mid/50 border border-border space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1.5">
+            <ListOrdered className="w-3.5 h-3.5" />
+            Bet History
+          </p>
+          {(() => {
+            const bets = userBets[principalStr] ?? [];
+            if (bets.length === 0) {
+              return (
+                <p className="text-xs text-muted-foreground italic">
+                  No bets placed
+                </p>
+              );
+            }
+            return (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border">
+                    <TableHead className="text-muted-foreground text-xs">
+                      Bet ID
+                    </TableHead>
+                    <TableHead className="text-muted-foreground text-xs">
+                      Draw
+                    </TableHead>
+                    <TableHead className="text-muted-foreground text-xs">
+                      Number
+                    </TableHead>
+                    <TableHead className="text-muted-foreground text-xs">
+                      Amount
+                    </TableHead>
+                    <TableHead className="text-muted-foreground text-xs">
+                      Date
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bets.map((bet: any) => (
+                    <TableRow
+                      key={bet.betId.toString()}
+                      className="border-border"
+                    >
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        #{bet.betId.toString()}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        #{bet.drawId.toString()}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-neon font-bold">
+                          {bet.number.toString().padStart(2, "0")}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-gold font-semibold">
+                        ₹{bet.amount.toString()}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {new Date(
+                          Number(bet.timestamp) / 1_000_000,
+                        ).toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -351,7 +827,7 @@ export default function AdminPage() {
       </div>
 
       {/* Quick links bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {QUICK_LINKS.map((item) => (
           <button
             key={item.tab}
@@ -404,6 +880,13 @@ export default function AdminPage() {
             className="data-[state=active]:bg-neon data-[state=active]:text-black font-semibold"
           >
             All Bets
+          </TabsTrigger>
+          <TabsTrigger
+            data-ocid="admin.betstats.tab"
+            value="betstats"
+            className="data-[state=active]:bg-neon data-[state=active]:text-black font-semibold"
+          >
+            Bet Stats
           </TabsTrigger>
         </TabsList>
 
@@ -516,7 +999,7 @@ export default function AdminPage() {
                         ) : (
                           <>
                             <Trophy className="w-4 h-4 mr-2" />
-                            Set Winner & Settle
+                            Set Winner &amp; Settle
                           </>
                         )}
                       </Button>
@@ -572,6 +1055,9 @@ export default function AdminPage() {
                         ? allBets.filter((b) => b.drawId === draw.id).length
                         : 0;
                       const drawIdStr = draw.id.toString();
+                      const isSettledOrClosed =
+                        draw.status.__kind__ === "settled" ||
+                        draw.status.__kind__ === "closed";
                       return (
                         <TableRow
                           key={drawIdStr}
@@ -610,34 +1096,89 @@ export default function AdminPage() {
                             ).toLocaleString()}
                           </TableCell>
                           <TableCell>
-                            {draw.status.__kind__ === "closed" && (
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max="99"
-                                  placeholder="00-99"
-                                  value={settleHistoryMap[drawIdStr] ?? ""}
-                                  onChange={(e) =>
-                                    setSettleHistoryMap((prev) => ({
-                                      ...prev,
-                                      [drawIdStr]: e.target.value,
-                                    }))
-                                  }
-                                  className="w-20 bg-card-mid border-border focus:border-gold text-foreground text-xs h-7 px-2"
-                                />
-                                <Button
-                                  data-ocid={`admin.draws.declare.${idx + 1}`}
-                                  size="sm"
-                                  onClick={() => handleSettleHistory(drawIdStr)}
-                                  disabled={settleDraw.isPending}
-                                  className="bg-gold text-black hover:bg-gold/90 font-bold rounded-full text-xs px-3 h-7"
-                                >
-                                  <Trophy className="w-3 h-3 mr-1" />
-                                  Declare
-                                </Button>
-                              </div>
-                            )}
+                            <div className="flex flex-wrap items-center gap-1">
+                              {draw.status.__kind__ === "closed" && (
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="99"
+                                    placeholder="00-99"
+                                    value={settleHistoryMap[drawIdStr] ?? ""}
+                                    onChange={(e) =>
+                                      setSettleHistoryMap((prev) => ({
+                                        ...prev,
+                                        [drawIdStr]: e.target.value,
+                                      }))
+                                    }
+                                    className="w-20 bg-card-mid border-border focus:border-gold text-foreground text-xs h-7 px-2"
+                                  />
+                                  <Button
+                                    data-ocid={`admin.draws.declare.${idx + 1}`}
+                                    size="sm"
+                                    onClick={() =>
+                                      handleSettleHistory(drawIdStr)
+                                    }
+                                    disabled={settleDraw.isPending}
+                                    className="bg-gold text-black hover:bg-gold/90 font-bold rounded-full text-xs px-3 h-7"
+                                  >
+                                    <Trophy className="w-3 h-3 mr-1" />
+                                    Declare
+                                  </Button>
+                                </div>
+                              )}
+
+                              {isSettledOrClosed &&
+                                (!showDeleteDrawConfirm[drawIdStr] ? (
+                                  <Button
+                                    data-ocid={`admin.draws.delete.${idx + 1}`}
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      setShowDeleteDrawConfirm((prev) => ({
+                                        ...prev,
+                                        [drawIdStr]: true,
+                                      }))
+                                    }
+                                    className="border-destructive text-destructive hover:bg-destructive/10 rounded-full text-xs px-2 h-7"
+                                  >
+                                    <Trash2 className="w-3 h-3 mr-1" />
+                                    Delete
+                                  </Button>
+                                ) : (
+                                  <div className="flex gap-1">
+                                    <Button
+                                      data-ocid={`admin.draws.confirm_delete.${idx + 1}`}
+                                      size="sm"
+                                      onClick={() =>
+                                        handleDeleteDraw(drawIdStr)
+                                      }
+                                      disabled={deleteDraw.isPending}
+                                      className="bg-destructive text-white text-xs px-2 h-7 rounded-full"
+                                    >
+                                      {deleteDraw.isPending ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        "Confirm Delete"
+                                      )}
+                                    </Button>
+                                    <Button
+                                      data-ocid={`admin.draws.cancel_delete.${idx + 1}`}
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        setShowDeleteDrawConfirm((prev) => ({
+                                          ...prev,
+                                          [drawIdStr]: false,
+                                        }))
+                                      }
+                                      className="text-xs h-7"
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                ))}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -965,43 +1506,60 @@ export default function AdminPage() {
                 </Button>
               </div>
 
-              {/* Search result */}
+              {/* Search result — full action panel */}
               {searchedUser !== undefined && (
                 <div
                   data-ocid="admin.users.search.success_state"
-                  className={`p-4 rounded-xl border ${
+                  className={`rounded-xl border ${
                     searchedUser
                       ? "bg-neon/5 border-neon/30"
                       : "bg-destructive/5 border-destructive/30"
                   }`}
                 >
                   {searchedUser ? (
-                    <div className="flex items-center gap-4">
-                      <div className="flex-1">
-                        <p className="text-xs text-muted-foreground uppercase">
-                          Found User
-                        </p>
-                        <p className="font-mono font-bold text-neon text-lg">
-                          #
-                          {(searchedUser as any).userId
-                            .toString()
-                            .padStart(4, "0")}
-                        </p>
-                        <p className="text-xs text-muted-foreground font-mono break-all">
-                          {(searchedUser as any).user.toString()}
-                        </p>
+                    <div className="p-4 space-y-4">
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1">
+                          <p className="text-xs text-muted-foreground uppercase">
+                            Found User
+                          </p>
+                          <p className="font-mono font-bold text-neon text-lg">
+                            #
+                            {(searchedUser as any).userId
+                              .toString()
+                              .padStart(4, "0")}
+                          </p>
+                          <p className="text-xs text-muted-foreground font-mono break-all">
+                            {(searchedUser as any).user.toString()}
+                          </p>
+                          {(searchedUser as any).isBlocked && (
+                            <Badge className="mt-1 bg-destructive/20 text-destructive border-destructive/30 border text-xs">
+                              BLOCKED
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">
+                            Balance
+                          </p>
+                          <p className="font-bold text-gold text-lg">
+                            ₹{(searchedUser as any).wallet.toString()}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Balance</p>
-                        <p className="font-bold text-gold text-lg">
-                          ₹{(searchedUser as any).wallet.toString()}
-                        </p>
-                      </div>
+                      {/* Full action panel for searched user */}
+                      {renderUserActions(
+                        searchedUser,
+                        (searchedUser as any).user.toString(),
+                        "search",
+                      )}
                     </div>
                   ) : (
-                    <p className="text-sm text-destructive font-semibold">
-                      No user found with that ID
-                    </p>
+                    <div className="p-4">
+                      <p className="text-sm text-destructive font-semibold">
+                        No user found with that ID
+                      </p>
+                    </div>
                   )}
                 </div>
               )}
@@ -1032,176 +1590,58 @@ export default function AdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {usersArr.map((userItem: any, userIdx: number) => {
-                      const principalStr = userItem.user.toString();
-                      return (
-                        <TableRow
-                          key={principalStr}
-                          data-ocid={`admin.users.item.${userIdx + 1}`}
-                          className="border-border"
-                        >
-                          <TableCell>
-                            <span className="font-mono font-bold text-neon text-sm">
-                              #{userItem.userId.toString().padStart(4, "0")}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-neon/20 flex items-center justify-center text-xs font-bold text-neon">
-                                {userIdx + 1}
-                              </div>
-                              <span className="text-xs text-muted-foreground font-mono truncate max-w-[120px]">
-                                {principalStr.substring(0, 12)}...
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-gold font-bold">
-                              ₹{userItem.wallet.toString()}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-2">
-                              <Button
-                                data-ocid={`admin.users.deduct.${userIdx + 1}`}
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  setShowDeductForm((prev) => ({
-                                    ...prev,
-                                    [principalStr]: !prev[principalStr],
-                                  }))
-                                }
-                                className="border-destructive text-destructive hover:bg-destructive/10 rounded-full text-xs px-3 h-7"
-                              >
-                                Deduct Balance
-                              </Button>
-                              {showDeductForm[principalStr] && (
-                                <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-card-mid border border-destructive/30">
-                                  <Input
-                                    data-ocid={`admin.users.deduct_amount.${userIdx + 1}`}
-                                    type="number"
-                                    min="1"
-                                    placeholder="Amount to deduct"
-                                    value={deductMap[principalStr] ?? ""}
-                                    onChange={(e) =>
-                                      setDeductMap((prev) => ({
-                                        ...prev,
-                                        [principalStr]: e.target.value,
-                                      }))
-                                    }
-                                    className="text-xs bg-card-deep border-border h-7 px-2"
-                                  />
-                                  <div className="flex gap-2">
-                                    <Button
-                                      data-ocid={`admin.users.confirm_deduct.${userIdx + 1}`}
-                                      size="sm"
-                                      onClick={() =>
-                                        handleDeductBalance(
-                                          principalStr,
-                                          userItem.user,
-                                        )
-                                      }
-                                      disabled={deductBalance.isPending}
-                                      className="bg-destructive text-white hover:bg-destructive/90 font-bold rounded-full text-xs px-3 h-7"
-                                    >
-                                      {deductBalance.isPending ? (
-                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                      ) : (
-                                        "Confirm"
-                                      )}
-                                    </Button>
-                                    <Button
-                                      data-ocid={`admin.users.cancel_deduct.${userIdx + 1}`}
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() =>
-                                        setShowDeductForm((prev) => ({
-                                          ...prev,
-                                          [principalStr]: false,
-                                        }))
-                                      }
-                                      className="text-xs h-7"
-                                    >
-                                      Cancel
-                                    </Button>
-                                  </div>
+                    {usersArr.map(
+                      (userItem: UserProfileAdmin, userIdx: number) => {
+                        const principalStr = userItem.user.toString();
+                        return (
+                          <>
+                            <TableRow
+                              key={principalStr}
+                              data-ocid={`admin.users.item.${userIdx + 1}`}
+                              className="border-border"
+                            >
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-bold text-neon text-sm">
+                                    #
+                                    {userItem.userId
+                                      .toString()
+                                      .padStart(4, "0")}
+                                  </span>
+                                  {userItem.isBlocked && (
+                                    <Badge className="bg-destructive/20 text-destructive border-destructive/30 border text-xs">
+                                      BLOCKED
+                                    </Badge>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                            {/* Add Balance */}
-                            <div className="flex flex-col gap-1.5">
-                              <Button
-                                data-ocid={`admin.users.add.${userIdx + 1}`}
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  setShowAddForm((prev) => ({
-                                    ...prev,
-                                    [principalStr]: !prev[principalStr],
-                                  }))
-                                }
-                                className="border-neon text-neon hover:bg-neon/10 rounded-full text-xs px-3 h-7"
-                              >
-                                Add Balance
-                              </Button>
-                              {showAddForm[principalStr] && (
-                                <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-card-mid border border-neon/30">
-                                  <Input
-                                    data-ocid={`admin.users.add_amount.${userIdx + 1}`}
-                                    type="number"
-                                    min="1"
-                                    placeholder="Amount to add"
-                                    value={addMap[principalStr] ?? ""}
-                                    onChange={(e) =>
-                                      setAddMap((prev) => ({
-                                        ...prev,
-                                        [principalStr]: e.target.value,
-                                      }))
-                                    }
-                                    className="text-xs bg-card-deep border-border h-7 px-2"
-                                  />
-                                  <div className="flex gap-2">
-                                    <Button
-                                      data-ocid={`admin.users.confirm_add.${userIdx + 1}`}
-                                      size="sm"
-                                      onClick={() =>
-                                        handleAddBalance(
-                                          principalStr,
-                                          userItem.user,
-                                        )
-                                      }
-                                      disabled={addBalance.isPending}
-                                      className="bg-neon text-black hover:bg-neon/90 font-bold rounded-full text-xs px-3 h-7"
-                                    >
-                                      {addBalance.isPending ? (
-                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                      ) : (
-                                        "Confirm"
-                                      )}
-                                    </Button>
-                                    <Button
-                                      data-ocid={`admin.users.cancel_add.${userIdx + 1}`}
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() =>
-                                        setShowAddForm((prev) => ({
-                                          ...prev,
-                                          [principalStr]: false,
-                                        }))
-                                      }
-                                      className="text-xs h-7"
-                                    >
-                                      Cancel
-                                    </Button>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-full bg-neon/20 flex items-center justify-center text-xs font-bold text-neon">
+                                    {userIdx + 1}
                                   </div>
+                                  <span className="text-xs text-muted-foreground font-mono truncate max-w-[120px]">
+                                    {principalStr.substring(0, 12)}...
+                                  </span>
                                 </div>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-gold font-bold">
+                                  ₹{userItem.wallet.toString()}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                {renderUserActions(
+                                  userItem,
+                                  principalStr,
+                                  `${userIdx + 1}`,
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          </>
+                        );
+                      },
+                    )}
                   </TableBody>
                 </Table>
               )}
@@ -1282,6 +1722,115 @@ export default function AdminPage() {
                     ))}
                   </TableBody>
                 </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* BET STATS TAB */}
+        <TabsContent value="betstats" className="space-y-6">
+          <Card className="bg-card-deep border-border">
+            <CardHeader>
+              <CardTitle className="text-base font-bold uppercase tracking-wide flex items-center gap-2">
+                <BarChart2 className="w-5 h-5 text-gold" />
+                {statsDrawId !== undefined
+                  ? `Bet Stats — Draw #${statsDrawId.toString()}`
+                  : "Bet Stats"}
+                <span className="ml-2 text-muted-foreground font-normal text-sm">
+                  ₹{statsDrawAmount.toLocaleString()} total
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {statsDrawId === undefined ? (
+                <p className="text-sm text-muted-foreground">
+                  No draw data available yet.
+                </p>
+              ) : (
+                <>
+                  {/* Top 3 */}
+                  {top3Numbers.length > 0 && (
+                    <div className="flex gap-3 flex-wrap">
+                      {top3Numbers.map((n, rank) => (
+                        <div
+                          key={n}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
+                            rank === 0
+                              ? "bg-gold/20 border-gold/40"
+                              : rank === 1
+                                ? "bg-neon/10 border-neon/30"
+                                : "bg-card-mid border-border"
+                          }`}
+                        >
+                          <span
+                            className={`text-lg font-black ${
+                              rank === 0
+                                ? "text-gold"
+                                : rank === 1
+                                  ? "text-neon"
+                                  : "text-foreground"
+                            }`}
+                          >
+                            #{rank + 1}
+                          </span>
+                          <div>
+                            <p className="font-mono font-bold text-sm">
+                              {n.toString().padStart(2, "0")}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              ₹{betsByNumber[n].toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 10x10 Grid */}
+                  <div className="grid grid-cols-10 gap-1">
+                    {Object.keys(betsByNumber)
+                      .map(Number)
+                      .sort((a, b) => a - b)
+                      .map((i) => {
+                        const amt = betsByNumber[i] ?? 0;
+                        const isTop = top3Numbers.includes(i);
+                        const hasBet = amt > 0;
+                        return (
+                          <div
+                            key={`num-${i}`}
+                            data-ocid={`admin.betstats.item.${i + 1}`}
+                            className={`flex flex-col items-center justify-center rounded-lg p-1 border text-center transition-all ${
+                              isTop
+                                ? "bg-gold/25 border-gold/50"
+                                : hasBet
+                                  ? "bg-neon/10 border-neon/25"
+                                  : "bg-card-mid/50 border-border/50 opacity-60"
+                            }`}
+                          >
+                            <span
+                              className={`text-xs font-bold font-mono leading-tight ${
+                                isTop
+                                  ? "text-gold"
+                                  : hasBet
+                                    ? "text-neon"
+                                    : "text-muted-foreground"
+                              }`}
+                            >
+                              {i.toString().padStart(2, "0")}
+                            </span>
+                            {hasBet && (
+                              <span className="text-[9px] leading-tight text-muted-foreground">
+                                ₹
+                                {amt >= 1000
+                                  ? `${(amt / 1000).toFixed(1)}k`
+                                  : amt}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>

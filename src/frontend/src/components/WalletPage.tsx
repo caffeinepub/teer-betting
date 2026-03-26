@@ -26,6 +26,7 @@ import {
   useCallerTransactions,
   useCreateDeposit,
   useCreateWithdrawal,
+  useIsCallerBlocked,
   useUserProfile,
 } from "../hooks/useQueries";
 
@@ -38,6 +39,7 @@ export default function WalletPage() {
   const { data: transactions } = useCallerTransactions();
   const createDeposit = useCreateDeposit();
   const createWithdrawal = useCreateWithdrawal();
+  const { data: isBlocked } = useIsCallerBlocked();
 
   const [depositAmount, setDepositAmount] = useState("");
   const [depositRef, setDepositRef] = useState("");
@@ -247,61 +249,73 @@ export default function WalletPage() {
         </Card>
 
         {/* Withdrawal */}
-        <Card className="bg-card-deep border-border">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base font-bold uppercase tracking-wide">
-              <ArrowUpCircle className="w-5 h-5 text-gold" />
-              Withdraw via UPI
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground font-semibold uppercase">
-                Amount (₹)
+        {isBlocked ? (
+          <Card className="bg-card-deep border-destructive/30">
+            <CardContent className="p-6 flex flex-col items-center gap-3 text-center">
+              <p className="font-bold text-destructive">Account Blocked</p>
+              <p className="text-sm text-muted-foreground">
+                Your withdrawal option has been disabled. Please contact
+                support.
               </p>
-              <Input
-                data-ocid="withdrawal.amount.input"
-                type="number"
-                min="1"
-                placeholder="Enter amount"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                className="bg-card-mid border-border focus:border-neon text-foreground"
-              />
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground font-semibold uppercase">
-                UPI ID
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="bg-card-deep border-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base font-bold uppercase tracking-wide">
+                <ArrowUpCircle className="w-5 h-5 text-gold" />
+                Withdraw via UPI
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground font-semibold uppercase">
+                  Amount (₹)
+                </p>
+                <Input
+                  data-ocid="withdrawal.amount.input"
+                  type="number"
+                  min="1"
+                  placeholder="Enter amount"
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  className="bg-card-mid border-border focus:border-neon text-foreground"
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground font-semibold uppercase">
+                  UPI ID
+                </p>
+                <Input
+                  data-ocid="withdrawal.upi.input"
+                  placeholder="e.g. yourname@upi"
+                  value={withdrawUpi}
+                  onChange={(e) => setWithdrawUpi(e.target.value)}
+                  className="bg-card-mid border-border focus:border-neon text-foreground"
+                />
+              </div>
+              <Button
+                data-ocid="withdrawal.submit.secondary_button"
+                onClick={handleWithdraw}
+                disabled={createWithdrawal.isPending}
+                variant="outline"
+                className="w-full border-gold text-gold hover:bg-gold/10 font-bold rounded-full gold-glow"
+              >
+                {createWithdrawal.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  "SUBMIT WITHDRAWAL REQUEST"
+                )}
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Withdrawal processed within 24 hours
               </p>
-              <Input
-                data-ocid="withdrawal.upi.input"
-                placeholder="e.g. yourname@upi"
-                value={withdrawUpi}
-                onChange={(e) => setWithdrawUpi(e.target.value)}
-                className="bg-card-mid border-border focus:border-neon text-foreground"
-              />
-            </div>
-            <Button
-              data-ocid="withdrawal.submit.secondary_button"
-              onClick={handleWithdraw}
-              disabled={createWithdrawal.isPending}
-              variant="outline"
-              className="w-full border-gold text-gold hover:bg-gold/10 font-bold rounded-full gold-glow"
-            >
-              {createWithdrawal.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                "SUBMIT WITHDRAWAL REQUEST"
-              )}
-            </Button>
-            <p className="text-xs text-muted-foreground text-center">
-              Withdrawal processed within 24 hours
-            </p>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Transaction History */}

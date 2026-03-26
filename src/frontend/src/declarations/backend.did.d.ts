@@ -36,14 +36,19 @@ export interface Transaction {
     { 'deposit' : { 'upiRef' : string, 'amount' : bigint } } |
     { 'withdrawal' : { 'upiId' : string, 'amount' : bigint } } |
     { 'payout' : { 'betId' : BetId, 'amount' : bigint } },
-  'rejectionReason' : [] | [string],
   'user' : Principal,
+  'rejectionReason' : [] | [string],
   'timestamp' : Time,
   'transactionId' : TransactionId,
 }
 export type TransactionId = bigint;
+export interface UserProfileAdmin {
+  'userId' : bigint,
+  'isBlocked' : boolean,
+  'user' : Principal,
+  'wallet' : bigint,
+}
 export interface UserProfilePublic { 'userId' : bigint, 'wallet' : bigint }
-export interface UserProfileAdmin { 'user' : Principal, 'userId' : bigint, 'wallet' : bigint }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
@@ -52,10 +57,12 @@ export interface _SERVICE {
   'addBalance' : ActorMethod<[Principal, bigint], undefined>,
   'approveTransaction' : ActorMethod<[TransactionId], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'blockUser' : ActorMethod<[Principal], undefined>,
   'closeDraw' : ActorMethod<[DrawId], undefined>,
   'createDepositRequest' : ActorMethod<[bigint, string], TransactionId>,
   'createWithdrawalRequest' : ActorMethod<[bigint, string], TransactionId>,
   'deductBalance' : ActorMethod<[Principal, bigint], undefined>,
+  'deleteDraw' : ActorMethod<[DrawId], undefined>,
   'getActiveDraw' : ActorMethod<[], [] | [Draw]>,
   'getAllBets' : ActorMethod<[], Array<Bet>>,
   'getAllTransactions' : ActorMethod<[], Array<Transaction>>,
@@ -67,15 +74,23 @@ export interface _SERVICE {
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getDrawHistory' : ActorMethod<[], Array<Draw>>,
   'getPendingRequests' : ActorMethod<[], Array<Transaction>>,
+  'getUserBets' : ActorMethod<[Principal], Array<Bet>>,
   'getUserByUserId' : ActorMethod<[bigint], [] | [UserProfileAdmin]>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfilePublic]>,
+  'getUserTransactions' : ActorMethod<[Principal], Array<Transaction>>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'isCallerBlocked' : ActorMethod<[], boolean>,
   'placeBet' : ActorMethod<[DrawId, bigint, bigint], BetId>,
+  'rejectBet' : ActorMethod<[BetId], undefined>,
   'rejectTransaction' : ActorMethod<[TransactionId], undefined>,
-  'rejectTransactionWithReason' : ActorMethod<[TransactionId, string], undefined>,
+  'rejectTransactionWithReason' : ActorMethod<
+    [TransactionId, string],
+    undefined
+  >,
   'saveCallerUserProfile' : ActorMethod<[UserProfilePublic], undefined>,
   'settleDraw' : ActorMethod<[DrawId, bigint], undefined>,
   'startDraw' : ActorMethod<[], DrawId>,
+  'unblockUser' : ActorMethod<[Principal], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

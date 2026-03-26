@@ -1,6 +1,11 @@
 import type { Principal } from "@icp-sdk/core/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { DrawId, TransactionId, UserProfileAdmin } from "../backend.d";
+import type {
+  DrawId,
+  Transaction,
+  TransactionId,
+  UserProfileAdmin,
+} from "../backend.d";
 import { useActor } from "./useActor";
 
 export function useIsAdmin() {
@@ -265,6 +270,8 @@ export function useDeductBalance() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["allUserProfiles"] });
+      qc.invalidateQueries({ queryKey: ["allTransactions"] });
+      qc.invalidateQueries({ queryKey: ["userProfile"] });
     },
   });
 }
@@ -349,6 +356,103 @@ export function useAddBalance() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["allUserProfiles"] });
+      qc.invalidateQueries({ queryKey: ["allTransactions"] });
+      qc.invalidateQueries({ queryKey: ["userProfile"] });
     },
+  });
+}
+
+export function useBlockUser() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (user: Principal) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).blockUser(user);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["allUserProfiles"] });
+      qc.invalidateQueries({ queryKey: ["userProfile"] });
+    },
+  });
+}
+
+export function useUnblockUser() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (user: Principal) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).unblockUser(user);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["allUserProfiles"] });
+      qc.invalidateQueries({ queryKey: ["userProfile"] });
+    },
+  });
+}
+
+export function useGetUserTransactions() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async (user: Principal): Promise<Transaction[]> => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).getUserTransactions(user) as any;
+    },
+  });
+}
+
+export function useRejectBet() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (betId: bigint) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).rejectBet(betId);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["allBets"] });
+      qc.invalidateQueries({ queryKey: ["allUserProfiles"] });
+      qc.invalidateQueries({ queryKey: ["allTransactions"] });
+      qc.invalidateQueries({ queryKey: ["userProfile"] });
+    },
+  });
+}
+
+export function useDeleteDraw() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (drawId: bigint) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).deleteDraw(drawId);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["drawHistory"] });
+      qc.invalidateQueries({ queryKey: ["activeDraw"] });
+    },
+  });
+}
+
+export function useGetUserBets() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async (user: any): Promise<any[]> => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).getUserBets(user) as any;
+    },
+  });
+}
+
+export function useIsCallerBlocked() {
+  const { actor, isFetching } = useActor();
+  return useQuery({
+    queryKey: ["isCallerBlocked"],
+    queryFn: async () => {
+      if (!actor) return false;
+      return (actor as any).isCallerBlocked();
+    },
+    enabled: !!actor && !isFetching,
+    refetchInterval: 15_000,
   });
 }
