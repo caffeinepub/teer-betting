@@ -352,47 +352,49 @@ export default function WalletPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(transactions as any[]).map((tx: any, idx: number) => {
-                  const type = tx.transactionType.__kind__;
-                  const amount = getTransactionAmount(tx);
-                  const isRejected =
-                    tx.status === Variant_pending_approved_rejected.rejected;
-                  const rejectionReason =
-                    isRejected && tx.rejectionReason
-                      ? tx.rejectionReason
-                      : null;
-                  return (
-                    <TableRow
-                      key={tx.transactionId.toString()}
-                      data-ocid={`transactions.item.${idx + 1}`}
-                      className="border-border"
-                    >
-                      <TableCell>
-                        <span className="capitalize text-sm font-semibold">
-                          {type}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {amount !== null ? `₹${amount.toString()}` : "-"}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {new Date(
-                          Number(tx.timestamp) / 1_000_000,
-                        ).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          {statusBadge(tx.status)}
-                          {rejectionReason && (
-                            <p className="text-xs text-destructive italic">
-                              Reason: {rejectionReason}
-                            </p>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {[...(transactions as any[])]
+                  .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
+                  .map((tx: any, idx: number) => {
+                    const type = tx.transactionType.__kind__;
+                    const amount = getTransactionAmount(tx);
+                    const isRejected =
+                      tx.status === Variant_pending_approved_rejected.rejected;
+                    const rejectionReason =
+                      isRejected && tx.rejectionReason
+                        ? tx.rejectionReason
+                        : null;
+                    return (
+                      <TableRow
+                        key={tx.transactionId.toString()}
+                        data-ocid={`transactions.item.${idx + 1}`}
+                        className="border-border"
+                      >
+                        <TableCell>
+                          <span className="capitalize text-sm font-semibold">
+                            {type}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {amount !== null ? `₹${amount.toString()}` : "-"}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {new Date(
+                            Number(tx.timestamp) / 1_000_000,
+                          ).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            {statusBadge(tx.status)}
+                            {rejectionReason && (
+                              <p className="text-xs text-destructive italic">
+                                Reason: {rejectionReason}
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
               </TableBody>
             </Table>
           )}

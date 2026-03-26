@@ -11,12 +11,16 @@ import {
 } from "@/components/ui/table";
 import { Hash, Loader2 } from "lucide-react";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import { useCallerBets } from "../hooks/useQueries";
+import { useCallerBets, useDrawHistory } from "../hooks/useQueries";
 
 export default function MyBetsPage() {
   const { identity, login } = useInternetIdentity();
   const isLoggedIn = !!identity;
   const { data: bets, isLoading } = useCallerBets();
+  const { data: drawHistory } = useDrawHistory();
+  const sortedBets = [...(bets || [])].sort(
+    (a: any, b: any) => Number(b.timestamp) - Number(a.timestamp),
+  );
 
   if (!isLoggedIn) {
     return (
@@ -91,36 +95,65 @@ export default function MyBetsPage() {
                   <TableHead className="text-muted-foreground text-xs">
                     Date
                   </TableHead>
+                  <TableHead className="text-muted-foreground text-xs">
+                    Result
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bets.map((bet, idx) => (
-                  <TableRow
-                    key={bet.betId.toString()}
-                    data-ocid={`bets.item.${idx + 1}`}
-                    className="border-border"
-                  >
-                    <TableCell className="text-xs font-mono text-muted-foreground">
-                      #{bet.betId.toString()}
-                    </TableCell>
-                    <TableCell className="text-xs font-mono text-muted-foreground">
-                      #{bet.drawId.toString()}
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-neon font-bold text-sm">
-                        {bet.number.toString().padStart(2, "0")}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-gold font-semibold">
-                      ₹{bet.amount.toString()}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {new Date(
-                        Number(bet.timestamp) / 1_000_000,
-                      ).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {sortedBets.map((bet: any, idx: number) => {
+                  const draw = ((drawHistory as any[]) ?? []).find(
+                    (d: any) => d.id.toString() === bet.drawId.toString(),
+                  );
+                  const isSettled = draw?.status?.__kind__ === "settled";
+                  const winningNum = isSettled
+                    ? Number(draw.status.settled)
+                    : null;
+                  const isWin = isSettled && winningNum === Number(bet.number);
+                  const isLoss = isSettled && winningNum !== Number(bet.number);
+                  return (
+                    <TableRow
+                      key={bet.betId.toString()}
+                      data-ocid={`bets.item.${idx + 1}`}
+                      className="border-border"
+                    >
+                      <TableCell className="text-xs font-mono text-muted-foreground">
+                        #{bet.betId.toString()}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono text-muted-foreground">
+                        #{bet.drawId.toString()}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-neon font-bold text-sm">
+                          {bet.number.toString().padStart(2, "0")}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-gold font-semibold">
+                        ₹{bet.amount.toString()}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {new Date(
+                          Number(bet.timestamp) / 1_000_000,
+                        ).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        {isWin ? (
+                          <Badge className="bg-neon/20 text-neon border-neon/30 border text-xs">
+                            WIN
+                          </Badge>
+                        ) : isLoss ? (
+                          <Badge className="bg-destructive/20 text-destructive border-destructive/30 border text-xs">
+                            LOSS
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">
+                            Pending
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

@@ -635,6 +635,33 @@ export default function AdminPage() {
       {/* Transaction History */}
       {showTxHistory[principalStr] && (
         <div className="mt-2 p-3 rounded-lg bg-card-mid/50 border border-border space-y-2">
+          {(() => {
+            const allTxs = userTxHistory[principalStr] ?? [];
+            const totalWon = allTxs
+              .filter((tx) => tx.transactionType.__kind__ === "payout")
+              .reduce(
+                (sum, tx) =>
+                  sum + Number((tx.transactionType as any).payout?.amount ?? 0),
+                0,
+              );
+            const totalBetAmt = allTxs
+              .filter((tx) => tx.transactionType.__kind__ === "bet")
+              .reduce(
+                (sum, tx) =>
+                  sum + Number((tx.transactionType as any).bet?.amount ?? 0),
+                0,
+              );
+            return (
+              <div className="flex gap-2 flex-wrap mb-1">
+                <span className="text-xs font-bold px-2 py-1 rounded-full bg-neon/10 text-neon border border-neon/20">
+                  Total Won: ₹{totalWon.toLocaleString()}
+                </span>
+                <span className="text-xs font-bold px-2 py-1 rounded-full bg-gold/10 text-gold border border-gold/20">
+                  Total Bet: ₹{totalBetAmt.toLocaleString()}
+                </span>
+              </div>
+            );
+          })()}
           <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1.5">
             <History className="w-3.5 h-3.5" />
             Deposit &amp; Withdrawal History
@@ -1050,139 +1077,143 @@ export default function AdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {drawHistory.map((draw, idx) => {
-                      const betCount = allBets
-                        ? allBets.filter((b) => b.drawId === draw.id).length
-                        : 0;
-                      const drawIdStr = draw.id.toString();
-                      const isSettledOrClosed =
-                        draw.status.__kind__ === "settled" ||
-                        draw.status.__kind__ === "closed";
-                      return (
-                        <TableRow
-                          key={drawIdStr}
-                          data-ocid={`admin.draws.item.${idx + 1}`}
-                          className="border-border"
-                        >
-                          <TableCell className="font-mono text-xs">
-                            #{drawIdStr}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              className={`text-xs border ${
-                                draw.status.__kind__ === "settled"
-                                  ? "bg-neon/20 text-neon border-neon/30"
-                                  : draw.status.__kind__ === "open"
-                                    ? "bg-gold/20 text-gold border-gold/30"
-                                    : "bg-muted text-muted-foreground border-border"
-                              }`}
-                            >
-                              {draw.status.__kind__}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-neon font-bold text-sm">
-                            {draw.status.__kind__ === "settled"
-                              ? draw.status.settled.toString().padStart(2, "0")
-                              : "-"}
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-xs font-semibold bg-card-mid border border-border rounded-full px-2 py-0.5">
-                              {betCount}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {new Date(
-                              Number(draw.createdAt) / 1_000_000,
-                            ).toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap items-center gap-1">
-                              {draw.status.__kind__ === "closed" && (
-                                <div className="flex items-center gap-2">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    max="99"
-                                    placeholder="00-99"
-                                    value={settleHistoryMap[drawIdStr] ?? ""}
-                                    onChange={(e) =>
-                                      setSettleHistoryMap((prev) => ({
-                                        ...prev,
-                                        [drawIdStr]: e.target.value,
-                                      }))
-                                    }
-                                    className="w-20 bg-card-mid border-border focus:border-gold text-foreground text-xs h-7 px-2"
-                                  />
-                                  <Button
-                                    data-ocid={`admin.draws.declare.${idx + 1}`}
-                                    size="sm"
-                                    onClick={() =>
-                                      handleSettleHistory(drawIdStr)
-                                    }
-                                    disabled={settleDraw.isPending}
-                                    className="bg-gold text-black hover:bg-gold/90 font-bold rounded-full text-xs px-3 h-7"
-                                  >
-                                    <Trophy className="w-3 h-3 mr-1" />
-                                    Declare
-                                  </Button>
-                                </div>
-                              )}
-
-                              {isSettledOrClosed &&
-                                (!showDeleteDrawConfirm[drawIdStr] ? (
-                                  <Button
-                                    data-ocid={`admin.draws.delete.${idx + 1}`}
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      setShowDeleteDrawConfirm((prev) => ({
-                                        ...prev,
-                                        [drawIdStr]: true,
-                                      }))
-                                    }
-                                    className="border-destructive text-destructive hover:bg-destructive/10 rounded-full text-xs px-2 h-7"
-                                  >
-                                    <Trash2 className="w-3 h-3 mr-1" />
-                                    Delete
-                                  </Button>
-                                ) : (
-                                  <div className="flex gap-1">
+                    {[...(drawHistory || [])]
+                      .sort((a: any, b: any) => Number(b.id) - Number(a.id))
+                      .map((draw, idx) => {
+                        const betCount = allBets
+                          ? allBets.filter((b) => b.drawId === draw.id).length
+                          : 0;
+                        const drawIdStr = draw.id.toString();
+                        const isSettledOrClosed =
+                          draw.status.__kind__ === "settled" ||
+                          draw.status.__kind__ === "closed";
+                        return (
+                          <TableRow
+                            key={drawIdStr}
+                            data-ocid={`admin.draws.item.${idx + 1}`}
+                            className="border-border"
+                          >
+                            <TableCell className="font-mono text-xs">
+                              #{drawIdStr}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                className={`text-xs border ${
+                                  draw.status.__kind__ === "settled"
+                                    ? "bg-neon/20 text-neon border-neon/30"
+                                    : draw.status.__kind__ === "open"
+                                      ? "bg-gold/20 text-gold border-gold/30"
+                                      : "bg-muted text-muted-foreground border-border"
+                                }`}
+                              >
+                                {draw.status.__kind__}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-neon font-bold text-sm">
+                              {draw.status.__kind__ === "settled"
+                                ? draw.status.settled
+                                    .toString()
+                                    .padStart(2, "0")
+                                : "-"}
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs font-semibold bg-card-mid border border-border rounded-full px-2 py-0.5">
+                                {betCount}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {new Date(
+                                Number(draw.createdAt) / 1_000_000,
+                              ).toLocaleString()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap items-center gap-1">
+                                {draw.status.__kind__ === "closed" && (
+                                  <div className="flex items-center gap-2">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="99"
+                                      placeholder="00-99"
+                                      value={settleHistoryMap[drawIdStr] ?? ""}
+                                      onChange={(e) =>
+                                        setSettleHistoryMap((prev) => ({
+                                          ...prev,
+                                          [drawIdStr]: e.target.value,
+                                        }))
+                                      }
+                                      className="w-20 bg-card-mid border-border focus:border-gold text-foreground text-xs h-7 px-2"
+                                    />
                                     <Button
-                                      data-ocid={`admin.draws.confirm_delete.${idx + 1}`}
+                                      data-ocid={`admin.draws.declare.${idx + 1}`}
                                       size="sm"
                                       onClick={() =>
-                                        handleDeleteDraw(drawIdStr)
+                                        handleSettleHistory(drawIdStr)
                                       }
-                                      disabled={deleteDraw.isPending}
-                                      className="bg-destructive text-white text-xs px-2 h-7 rounded-full"
+                                      disabled={settleDraw.isPending}
+                                      className="bg-gold text-black hover:bg-gold/90 font-bold rounded-full text-xs px-3 h-7"
                                     >
-                                      {deleteDraw.isPending ? (
-                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                      ) : (
-                                        "Confirm Delete"
-                                      )}
+                                      <Trophy className="w-3 h-3 mr-1" />
+                                      Declare
                                     </Button>
+                                  </div>
+                                )}
+
+                                {isSettledOrClosed &&
+                                  (!showDeleteDrawConfirm[drawIdStr] ? (
                                     <Button
-                                      data-ocid={`admin.draws.cancel_delete.${idx + 1}`}
+                                      data-ocid={`admin.draws.delete.${idx + 1}`}
                                       size="sm"
-                                      variant="ghost"
+                                      variant="outline"
                                       onClick={() =>
                                         setShowDeleteDrawConfirm((prev) => ({
                                           ...prev,
-                                          [drawIdStr]: false,
+                                          [drawIdStr]: true,
                                         }))
                                       }
-                                      className="text-xs h-7"
+                                      className="border-destructive text-destructive hover:bg-destructive/10 rounded-full text-xs px-2 h-7"
                                     >
-                                      Cancel
+                                      <Trash2 className="w-3 h-3 mr-1" />
+                                      Delete
                                     </Button>
-                                  </div>
-                                ))}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                                  ) : (
+                                    <div className="flex gap-1">
+                                      <Button
+                                        data-ocid={`admin.draws.confirm_delete.${idx + 1}`}
+                                        size="sm"
+                                        onClick={() =>
+                                          handleDeleteDraw(drawIdStr)
+                                        }
+                                        disabled={deleteDraw.isPending}
+                                        className="bg-destructive text-white text-xs px-2 h-7 rounded-full"
+                                      >
+                                        {deleteDraw.isPending ? (
+                                          <Loader2 className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          "Confirm Delete"
+                                        )}
+                                      </Button>
+                                      <Button
+                                        data-ocid={`admin.draws.cancel_delete.${idx + 1}`}
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() =>
+                                          setShowDeleteDrawConfirm((prev) => ({
+                                            ...prev,
+                                            [drawIdStr]: false,
+                                          }))
+                                        }
+                                        className="text-xs h-7"
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  ))}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                   </TableBody>
                 </Table>
               )}
